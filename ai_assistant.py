@@ -81,7 +81,7 @@ class SimpleAIHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html; charset=utf-8')
             self.end_headers()
-            self.wfile.write(SIMPLE_HTML.encode('utf-8'))
+            self.wfile.write(HTML.encode('utf-8'))
         else:
             self.send_response(404)
             self.end_headers()
@@ -90,54 +90,43 @@ class SimpleAIHandler(BaseHTTPRequestHandler):
         if self.path == '/api/chat':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
-            self._handle_chat(post_data)
+            
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+                message = data.get('message', '')
+                
+                if not message:
+                    self._send_json_response({'error': 'Пустое сообщение'}, 400)
+                    return
+                
+                # Обрабатываем сообщение сразу
+                response = self.ai.get_answer(message)
+                self._send_json_response({
+                    'response': response,
+                    'timestamp': datetime.now().isoformat()
+                })
+                
+            except Exception as e:
+                self._send_json_response({'error': str(e)}, 500)
         else:
             self.send_response(404)
             self.end_headers()
-    
-    def _handle_chat(self, post_data):
-        try:
-            data = json.loads(post_data.decode('utf-8'))
-            message = data.get('message', '')
-            
-            if not message:
-                self._send_json_response({'error': 'Пустое сообщение'}, 400)
-                return
-            
-            # Обрабатываем СРАЗУ в основном потоке
-            response = self.ai.get_answer(message)
-            self._send_json_response({
-                'response': response,
-                'timestamp': datetime.now().isoformat()
-            })
-            
-        except Exception as e:
-            self._send_json_response({'error': str(e)}, 500)
     
     def _send_json_response(self, data, status=200):
         self.send_response(status)
         self.send_header('Content-type', 'application/json; charset=utf-8')
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode('utf-8'))
-    
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
 
-# Простой и чистый HTML интерфейс
-SIMPLE_HTML = '''
+# Упрощенный HTML
+HTML = '''
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>💬 ИИ Чат по Программированию</title>
+    <title>💬 ИИ Чат</title>
     <style>
         * {
             margin: 0;
@@ -146,293 +135,134 @@ SIMPLE_HTML = '''
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 0;
-        }
-
-        .app {
-            max-width: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f0f2f5;
             height: 100vh;
             display: flex;
             flex-direction: column;
-            background: white;
         }
 
         .header {
-            background: #2c3e50;
+            background: #007bff;
             color: white;
             padding: 20px;
             text-align: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-
-        .header h1 {
-            font-size: 1.4em;
-            margin-bottom: 5px;
-        }
-
-        .header p {
-            opacity: 0.8;
-            font-size: 0.9em;
         }
 
         .messages {
             flex: 1;
-            padding: 15px;
+            padding: 20px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            background: #f8f9fa;
+            gap: 15px;
         }
 
         .message {
-            max-width: 85%;
+            max-width: 80%;
             padding: 12px 16px;
             border-radius: 18px;
             word-wrap: break-word;
-            animation: fadeIn 0.3s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
         }
 
         .user-message {
             background: #007bff;
             color: white;
             margin-left: auto;
-            border-bottom-right-radius: 6px;
+            border-bottom-right-radius: 5px;
         }
 
         .ai-message {
             background: white;
             color: #333;
-            border: 1px solid #e0e0e0;
-            border-bottom-left-radius: 6px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid #ddd;
+            border-bottom-left-radius: 5px;
         }
 
         .input-area {
             padding: 15px;
             background: white;
-            border-top: 1px solid #e0e0e0;
+            border-top: 1px solid #ddd;
             display: flex;
             gap: 10px;
-            align-items: flex-end;
         }
 
-        .input-container {
+        #messageInput {
             flex: 1;
-            position: relative;
-        }
-
-        .input-area textarea {
-            width: 100%;
-            padding: 12px 50px 12px 15px;
-            border: 2px solid #e0e0e0;
+            padding: 12px;
+            border: 2px solid #ddd;
             border-radius: 25px;
-            resize: none;
-            font-family: inherit;
             font-size: 16px;
-            background: #f8f9fa;
-            transition: border-color 0.3s;
-            max-height: 120px;
-            min-height: 50px;
-        }
-
-        .input-area textarea:focus {
             outline: none;
-            border-color: #007bff;
-            background: white;
         }
 
-        .send-btn {
-            position: absolute;
-            right: 8px;
-            bottom: 8px;
+        #messageInput:focus {
+            border-color: #007bff;
+        }
+
+        button {
             background: #007bff;
             color: white;
             border: none;
-            border-radius: 50%;
-            width: 36px;
-            height: 36px;
+            padding: 12px 20px;
+            border-radius: 25px;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.3s;
+            font-size: 16px;
         }
 
-        .send-btn:hover {
+        button:hover {
             background: #0056b3;
-        }
-
-        .send-btn:active {
-            transform: scale(0.95);
         }
 
         .code-block {
             background: #2c3e50;
-            color: #ecf0f1;
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 8px;
-            font-family: 'Courier New', monospace;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 5px;
+            font-family: monospace;
             white-space: pre-wrap;
-            font-size: 14px;
-            line-height: 1.4;
-            overflow-x: auto;
-        }
-
-        .typing-indicator {
-            display: none;
-            padding: 12px 16px;
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 18px;
-            border-bottom-left-radius: 6px;
-            color: #666;
-            font-style: italic;
-            max-width: 85%;
-        }
-
-        .typing-dots {
-            display: inline-block;
-        }
-
-        .typing-dots::after {
-            content: '...';
-            animation: typing 1.5s infinite;
-        }
-
-        @keyframes typing {
-            0%, 20% { content: '.'; }
-            40% { content: '..'; }
-            60%, 100% { content: '...'; }
-        }
-
-        /* Мобильная оптимизация */
-        @media (max-width: 480px) {
-            .header {
-                padding: 15px;
-            }
-            
-            .header h1 {
-                font-size: 1.2em;
-            }
-            
-            .messages {
-                padding: 10px;
-                gap: 10px;
-            }
-            
-            .message {
-                max-width: 90%;
-                padding: 10px 14px;
-                font-size: 14px;
-            }
-            
-            .input-area {
-                padding: 10px;
-            }
-        }
-
-        /* Темная тема */
-        @media (prefers-color-scheme: dark) {
-            .app {
-                background: #1a1a1a;
-                color: white;
-            }
-            
-            .messages {
-                background: #2d2d2d;
-            }
-            
-            .ai-message {
-                background: #333;
-                color: white;
-                border-color: #444;
-            }
-            
-            .input-area textarea {
-                background: #333;
-                color: white;
-                border-color: #444;
-            }
-            
-            .input-area textarea:focus {
-                background: #444;
-            }
         }
     </style>
 </head>
 <body>
-    <div class="app">
-        <div class="header">
-            <h1>💬 ИИ Чат по Программированию</h1>
-            <p>Простой помощник для вопросов о коде</p>
-        </div>
+    <div class="header">
+        <h1>💬 ИИ Чат по Программированию</h1>
+    </div>
 
-        <div class="messages" id="messages">
-            <div class="message ai-message">
-                Привет! 👋 Я простой ИИ помощник по программированию.<br><br>
-                Могу объяснить основы Python, JavaScript, веб-разработки, алгоритмов и многое другое.<br><br>
-                Просто напиши свой вопрос ниже!
-            </div>
-        </div>
-
-        <div class="input-area">
-            <div class="input-container">
-                <textarea id="messageInput" placeholder="Задайте вопрос о программировании..." rows="1"></textarea>
-                <button class="send-btn" onclick="sendMessage()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                    </svg>
-                </button>
-            </div>
-        </div>
-
-        <div class="typing-indicator" id="typingIndicator">
-            ИИ печатает<span class="typing-dots"></span>
+    <div class="messages" id="messages">
+        <div class="message ai-message">
+            Привет! Задайте вопрос о программировании.
         </div>
     </div>
 
-    <script>
-        let isProcessing = false;
+    <div class="input-area">
+        <input type="text" id="messageInput" placeholder="Введите ваш вопрос...">
+        <button onclick="sendMessage()">Отправить</button>
+    </div>
 
+    <script>
         function addMessage(text, isUser = false) {
             const messagesDiv = document.getElementById('messages');
             const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+            messageDiv.className = isUser ? 'user-message' : 'ai-message';
             
-            // Форматируем код блоки
-            let formattedText = text.replace(/```(\w+)?\n([\s\S]*?)```/g, '<div class="code-block">$2</div>');
-            formattedText = formattedText.replace(/\n/g, '<br>');
+            // Форматируем код
+            let formattedText = text;
+            if (text.includes('```')) {
+                formattedText = text.replace(/```(\w+)?\\n([\\s\\S]*?)```/g, '$2');
+                formattedText = formattedText.replace(/\n/g, '<br>');
+                formattedText = formattedText.replace(/(```[\\s\\S]*?```)/g, '<div class="code-block">$1</div>');
+            } else {
+                formattedText = text.replace(/\n/g, '<br>');
+            }
             
             messageDiv.innerHTML = formattedText;
             messagesDiv.appendChild(messageDiv);
-            
-            // Прокрутка вниз
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
-        function showTypingIndicator() {
-            const indicator = document.getElementById('typingIndicator');
-            indicator.style.display = 'block';
-            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
-        }
-
-        function hideTypingIndicator() {
-            document.getElementById('typingIndicator').style.display = 'none';
-        }
-
         async function sendMessage() {
-            if (isProcessing) return;
-            
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
             
@@ -440,14 +270,9 @@ SIMPLE_HTML = '''
             
             // Очищаем поле ввода
             input.value = '';
-            resetTextarea();
             
-            // Добавляем сообщение пользователя
+            // Показываем сообщение пользователя сразу
             addMessage(message, true);
-            
-            // Показываем индикатор набора
-            showTypingIndicator();
-            isProcessing = true;
             
             try {
                 const response = await fetch('/api/chat', {
@@ -460,43 +285,25 @@ SIMPLE_HTML = '''
                 
                 const data = await response.json();
                 
-                hideTypingIndicator();
-                isProcessing = false;
-                
                 if (data.error) {
-                    addMessage(`❌ Ошибка: ${data.error}`);
+                    addMessage('Ошибка: ' + data.error);
                 } else {
                     addMessage(data.response);
                 }
                 
             } catch (error) {
-                hideTypingIndicator();
-                isProcessing = false;
-                addMessage('❌ Ошибка соединения. Проверьте интернет.');
+                addMessage('Ошибка соединения');
             }
         }
 
-        function resetTextarea() {
-            const textarea = document.getElementById('messageInput');
-            textarea.style.height = 'auto';
-            textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-        }
-
-        // Автоматическое изменение высоты textarea
-        document.getElementById('messageInput').addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-        });
-
-        // Отправка по Enter (Shift+Enter для новой строки)
-        document.getElementById('messageInput').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
+        // Отправка по Enter
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
                 sendMessage();
             }
         });
 
-        // Фокус на поле ввода при загрузке
+        // Фокус на поле ввода
         document.getElementById('messageInput').focus();
     </script>
 </body>
@@ -504,23 +311,17 @@ SIMPLE_HTML = '''
 '''
 
 def main():
-    port = int(os.environ.get('PORT', 8000))
-    server = HTTPServer(('0.0.0.0', port), SimpleAIHandler)
+    port = 8000
+    server = HTTPServer(('localhost', port), SimpleAIHandler)
     
-    print(f"💬 Простой ИИ Чат запущен!")
-    print(f"📍 Откройте в браузере: http://localhost:{port}")
-    print(f"📱 Оптимизирован для мобильных устройств")
-    print("\n⚡ Особенности:")
-    print("• 🎯 Простой и понятный интерфейс")
-    print("• 📱 Идеально для телефонов")
-    print("• 💬 Умные ответы о программировании")
-    print("• 🚀 Быстрая работа")
-    print("\nНажмите Ctrl+C для остановки")
+    print(f"🚀 ИИ Чат запущен!")
+    print(f"📱 Откройте: http://localhost:{port}")
+    print("💬 Просто введите вопрос и нажмите Отправить")
     
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n👋 Чат остановлен. До свидания!")
+        print("\n👋 Сервер остановлен")
 
 if __name__ == '__main__':
     main()
