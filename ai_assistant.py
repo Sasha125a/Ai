@@ -2,7 +2,6 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import os
 from datetime import datetime
-import threading
 
 class SimpleAI:
     def __init__(self):
@@ -105,17 +104,12 @@ class SimpleAIHandler(BaseHTTPRequestHandler):
                 self._send_json_response({'error': 'Пустое сообщение'}, 400)
                 return
             
-            # Обрабатываем в отдельном потоке
-            def process_message():
-                response = self.ai.get_answer(message)
-                self._send_json_response({
-                    'response': response,
-                    'timestamp': datetime.now().isoformat()
-                })
-            
-            thread = threading.Thread(target=process_message)
-            thread.daemon = True
-            thread.start()
+            # Обрабатываем СРАЗУ в основном потоке
+            response = self.ai.get_answer(message)
+            self._send_json_response({
+                'response': response,
+                'timestamp': datetime.now().isoformat()
+            })
             
         except Exception as e:
             self._send_json_response({'error': str(e)}, 500)
@@ -294,42 +288,6 @@ SIMPLE_HTML = '''
             overflow-x: auto;
         }
 
-        .quick-questions {
-            padding: 15px;
-            background: #f8f9fa;
-            border-top: 1px solid #e0e0e0;
-        }
-
-        .quick-questions h3 {
-            margin-bottom: 10px;
-            font-size: 0.9em;
-            color: #666;
-            text-align: center;
-        }
-
-        .quick-buttons {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-        }
-
-        .quick-btn {
-            background: white;
-            color: #007bff;
-            border: 1px solid #007bff;
-            padding: 10px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s;
-            text-align: center;
-        }
-
-        .quick-btn:hover {
-            background: #007bff;
-            color: white;
-        }
-
         .typing-indicator {
             display: none;
             padding: 12px 16px;
@@ -381,14 +339,6 @@ SIMPLE_HTML = '''
             .input-area {
                 padding: 10px;
             }
-            
-            .quick-questions {
-                padding: 10px;
-            }
-            
-            .quick-buttons {
-                grid-template-columns: 1fr;
-            }
         }
 
         /* Темная тема */
@@ -417,21 +367,6 @@ SIMPLE_HTML = '''
             .input-area textarea:focus {
                 background: #444;
             }
-            
-            .quick-questions {
-                background: #2d2d2d;
-            }
-            
-            .quick-btn {
-                background: #333;
-                color: #4dabf7;
-                border-color: #4dabf7;
-            }
-            
-            .quick-btn:hover {
-                background: #4dabf7;
-                color: white;
-            }
         }
     </style>
 </head>
@@ -446,17 +381,7 @@ SIMPLE_HTML = '''
             <div class="message ai-message">
                 Привет! 👋 Я простой ИИ помощник по программированию.<br><br>
                 Могу объяснить основы Python, JavaScript, веб-разработки, алгоритмов и многое другое.<br><br>
-                Просто спроси или нажми на быстрые вопросы ниже!
-            </div>
-        </div>
-
-        <div class="quick-questions">
-            <h3>Быстрые вопросы:</h3>
-            <div class="quick-buttons">
-                <button class="quick-btn" onclick="askQuestion('Что такое Python?')">🐍 Про Python</button>
-                <button class="quick-btn" onclick="askQuestion('Объясни ООП')">🎯 Про ООП</button>
-                <button class="quick-btn" onclick="askQuestion('Что такое JavaScript?')">📜 Про JavaScript</button>
-                <button class="quick-btn" onclick="askQuestion('Сгенерируй пример кода')">💻 Пример кода</button>
+                Просто напиши свой вопрос ниже!
             </div>
         </div>
 
@@ -551,11 +476,6 @@ SIMPLE_HTML = '''
             }
         }
 
-        function askQuestion(question) {
-            document.getElementById('messageInput').value = question;
-            sendMessage();
-        }
-
         function resetTextarea() {
             const textarea = document.getElementById('messageInput');
             textarea.style.height = 'auto';
@@ -578,21 +498,6 @@ SIMPLE_HTML = '''
 
         // Фокус на поле ввода при загрузке
         document.getElementById('messageInput').focus();
-
-        // Обработка свайпов (для мобильных)
-        let startY;
-        const messagesDiv = document.getElementById('messages');
-
-        messagesDiv.addEventListener('touchstart', (e) => {
-            startY = e.touches[0].clientY;
-        });
-
-        messagesDiv.addEventListener('touchmove', (e) => {
-            const currentY = e.touches[0].clientY;
-            if (startY - currentY > 50) { // Свайп вверх
-                document.getElementById('messageInput').focus();
-            }
-        });
     </script>
 </body>
 </html>
