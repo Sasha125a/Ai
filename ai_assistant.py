@@ -400,10 +400,6 @@ class MyClass:
         # Метод - поведение объекта
         return результат
 
-# Использование:
-obj = MyClass(аргументы)
-obj.метод(аргументы)
-
 class SmartAI:
     def __init__(self):
         self.conversation_history = []
