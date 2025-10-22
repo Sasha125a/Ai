@@ -52,66 +52,102 @@ class SimpleClassifier:
         
         return intents if intents else ['unknown']
 
-class WebSearch:
+class AdvancedWebSearch:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         })
     
     def search_internet(self, query, max_results=3):
-        """Универсальный поиск с несколькими источниками"""
+        """Умный поиск с несколькими источниками"""
+        print(f"🔍 Запускаю улучшенный поиск для: {query}")
+        all_results = []
+        
+        # 1. Пробуем Bing (самый надежный бесплатный вариант)
         try:
-            # Пробуем разные методы поиска
-            results = []
-            
-            # 1. DuckDuckGo
-            ddg_results = self._duckduckgo_search(query, max_results)
-            results.extend(ddg_results)
-            
-            # 2. Если результатов мало, пробуем другие методы
-            if len(results) < max_results:
-                bing_results = self._bing_search(query, max_results - len(results))
-                results.extend(bing_results)
-            
-            return results[:max_results]
-            
+            bing_results = self._bing_search(query, max_results)
+            all_results.extend(bing_results)
+            print(f"✅ Bing найдено: {len(bing_results)} результатов")
         except Exception as e:
-            print(f"❌ Ошибка поиска: {e}")
-            return []
+            print(f"❌ Bing ошибка: {e}")
+        
+        # 2. DuckDuckGo как запасной вариант
+        if len(all_results) < max_results:
+            try:
+                ddg_results = self._duckduckgo_search(query, max_results - len(all_results))
+                all_results.extend(ddg_results)
+                print(f"✅ DuckDuckGo найдено: {len(ddg_results)} результатов")
+            except Exception as e:
+                print(f"❌ DuckDuckGo ошибка: {e}")
+        
+        # 3. Wikipedia для энциклопедических справок
+        if any(word in query.lower() for word in ['что такое', 'кто такой', 'определение', 'означает']):
+            try:
+                wiki_result = self._wikipedia_search(query)
+                if wiki_result:
+                    all_results.append(wiki_result)
+                    print(f"✅ Wikipedia найдено: 1 результат")
+            except Exception as e:
+                print(f"❌ Wikipedia ошибка: {e}")
+        
+        print(f"🎯 Всего найдено результатов: {len(all_results)}")
+        return all_results[:max_results]
     
     def _bing_search(self, query, max_results):
-        """Поиск через Bing (более надежный чем DuckDuckGo)"""
+        """Поиск через парсинг Bing - самый надежный метод"""
         try:
             url = "https://www.bing.com/search"
-            params = {'q': query}
+            params = {'q': query, 'count': max_results}
             
-            response = self.session.get(url, params=params, timeout=10)
+            response = self.session.get(url, params=params, timeout=15)
+            response.raise_for_status()
             
-            # Простой парсинг результатов Bing
             results = []
-            pattern = r'<li class="b_algo">.*?<h2>.*?<a href="([^"]+)".*?>(.*?)</a>.*?<div class="b_caption">.*?<p>(.*?)</p>'
-            matches = re.findall(pattern, response.text, re.DOTALL)
             
-            for url, title, snippet in matches[:max_results]:
-                # Очистка HTML тегов
-                title = re.sub(r'<.*?>', '', title)
-                snippet = re.sub(r'<.*?>', '', snippet)
-                
-                results.append({
-                    'title': title[:100],
-                    'snippet': snippet[:200],
-                    'source': 'Bing',
-                    'url': url
-                })
+            # Улучшенные регулярки для парсинга Bing
+            # Ищем блоки с результатами
+            pattern = r'<li class="b_algo">(.*?)</li>'
+            items = re.findall(pattern, response.text, re.DOTALL)
+            
+            for item in items[:max_results]:
+                try:
+                    # Извлекаем заголовок
+                    title_match = re.search(r'<h2>\s*<a[^>]*>(.*?)</a>\s*</h2>', item, re.DOTALL)
+                    # Извлекаем ссылку
+                    url_match = re.search(r'href="([^"]+)"', item)
+                    # Извлекаем описание
+                    desc_match = re.search(r'<p[^>]*>(.*?)</p>', item, re.DOTALL)
+                    
+                    if title_match and url_match:
+                        title = re.sub(r'<.*?>', '', title_match.group(1)).strip()
+                        url = url_match.group(1)
+                        
+                        # Очищаем описание от HTML тегов
+                        snippet = ""
+                        if desc_match:
+                            snippet = re.sub(r'<.*?>', '', desc_match.group(1)).strip()
+                            snippet = re.sub(r'\s+', ' ', snippet)  # Убираем лишние пробелы
+                        
+                        # Проверяем, что это нормальная ссылка
+                        if url.startswith('http'):
+                            results.append({
+                                'title': title[:100] + '...' if len(title) > 100 else title,
+                                'snippet': snippet[:250] + '...' if len(snippet) > 250 else snippet,
+                                'source': 'Bing',
+                                'url': url
+                            })
+                except Exception as e:
+                    print(f"⚠️ Ошибка парсинга элемента Bing: {e}")
+                    continue
             
             return results
         except Exception as e:
-            print(f"❌ Ошибка Bing поиска: {e}")
+            print(f"❌ Ошибка парсинга Bing: {e}")
             return []
     
     def _duckduckgo_search(self, query, max_results):
-        """Поиск через DuckDuckGo"""
+        """Резервный поиск через DuckDuckGo"""
         try:
             url = "https://api.duckduckgo.com/"
             params = {
@@ -137,6 +173,33 @@ class WebSearch:
         except Exception as e:
             print(f"❌ Ошибка DuckDuckGo: {e}")
             return []
+    
+    def _wikipedia_search(self, query):
+        """Поиск в Wikipedia для определений"""
+        try:
+            # Извлекаем ключевое слово после "что такое"
+            clean_query = re.sub(r'что такое|кто такой|определение|означает', '', query, flags=re.IGNORECASE).strip()
+            clean_query = clean_query.split('?')[0].split('.')[0].strip()  # Убираем знаки вопроса и точки
+            
+            if len(clean_query) < 2:  # Слишком короткий запрос
+                return None
+                
+            url = f"https://ru.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(clean_query)}"
+            response = self.session.get(url, timeout=8)
+            
+            if response.status_code == 200:
+                data = response.json()
+                snippet = data.get('extract', '')
+                if snippet:
+                    return {
+                        'title': f"📚 {data.get('title', 'Википедия')}",
+                        'snippet': snippet,
+                        'source': 'Wikipedia',
+                        'url': data.get('content_urls', {}).get('desktop', {}).get('page', '')
+                    }
+        except Exception as e:
+            print(f"⚠️ Wikipedia поиск не удался: {e}")
+        return None
 
 class TextKnowledgeBase:
     """Простая текстовая база знаний в JSON файле"""
@@ -335,7 +398,7 @@ class EnhancedLearningAI:
     def __init__(self):
         self.knowledge_base = TextKnowledgeBase()
         self.classifier = SimpleClassifier()
-        self.web_search = WebSearch()
+        self.web_search = AdvancedWebSearch()  # ← ЗДЕСЬ ЗАМЕНИТЕ!
         
         # Инициализация начальными знаниями
         self._initialize_with_basic_knowledge()
@@ -394,16 +457,16 @@ class EnhancedLearningAI:
     def _web_search_and_save(self, user_message, intent, entities):
         """Поиск в интернете и сохранение в базу знаний"""
         try:
-            print(f"🌐 Запускаю поиск для: {user_message}")
+            print(f"🌐 Запускаю улучшенный поиск для: {user_message}")
             search_results = self.web_search.search_internet(user_message, max_results=3)
-            
+        
             if search_results:
                 # Формируем красивый ответ
-                answer_parts = [f"**🔍 По вашему запросу найдено:**\n"]
-                
+                answer_parts = ["**🔍 Найдена информация по вашему запросу:**\n"]
+            
                 for i, result in enumerate(search_results, 1):
                     title = result.get('title', 'Без названия')
-                    snippet = result.get('snippet', 'Информация не найдена')
+                    snippet = result.get('snippet', 'Описание отсутствует')
                     source = result.get('source', 'Неизвестный источник')
                 
                     # Ограничиваем длину сниппета
@@ -413,7 +476,7 @@ class EnhancedLearningAI:
                     answer_parts.append(f"\n**{i}. {title}**")
                     answer_parts.append(f"{snippet}")
                     if result.get('url'):
-                        answer_parts.append(f"*📚 Источник: {source}*")
+                        answer_parts.append(f"*🔗 Источник: {source}*")
                     answer_parts.append("")  # пустая строка для разделения
             
                 full_answer = "\n".join(answer_parts)
@@ -443,7 +506,7 @@ class EnhancedLearningAI:
                     f"Попробуйте переформулировать вопрос или задать его более конкретно."
                 )
                 return info_answer, "generated"
-            
+        
         except Exception as e:
             print(f"❌ Ошибка веб-поиска: {e}")
             error_answer = (
