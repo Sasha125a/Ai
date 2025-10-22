@@ -9,12 +9,11 @@ class SmartAI:
         self.conversation_history = []
         self.user_profile = {
             'interests': set(),
-            'skill_level': 'beginner',  # beginner, intermediate, advanced
+            'skill_level': 'beginner',
             'preferred_languages': set()
         }
         
     def analyze_intent(self, message):
-        """Анализ намерения пользователя"""
         message_lower = message.lower()
         
         intents = {
@@ -33,7 +32,6 @@ class SmartAI:
         return [intent for intent, detected in intents.items() if detected]
     
     def extract_entities(self, message):
-        """Извлечение сущностей из сообщения"""
         entities = {
             'languages': [],
             'technologies': [],
@@ -41,7 +39,6 @@ class SmartAI:
             'level_indicators': []
         }
         
-        # Языки программирования
         languages = {
             'python': ['python', 'питон', 'пайтон'],
             'javascript': ['javascript', 'js', 'джаваскрипт'],
@@ -56,7 +53,6 @@ class SmartAI:
             if any(keyword in message.lower() for keyword in keywords):
                 entities['languages'].append(lang)
         
-        # Технологии и фреймворки
         technologies = {
             'react': ['react', 'реакт'],
             'vue': ['vue', 'вью'],
@@ -71,7 +67,6 @@ class SmartAI:
             if any(keyword in message.lower() for keyword in keywords):
                 entities['technologies'].append(tech)
         
-        # Концепции
         concepts = {
             'ооп': ['ооп', 'объектно-ориентированное', 'object-oriented'],
             'алгоритмы': ['алгоритм', 'алгоритмы', 'algorithm'],
@@ -88,11 +83,9 @@ class SmartAI:
         return entities
     
     def update_user_profile(self, message, entities):
-        """Обновление профиля пользователя на основе его сообщений"""
         if entities['languages']:
             self.user_profile['preferred_languages'].update(entities['languages'])
         
-        # Определяем уровень навыков
         level_indicators = {
             'beginner': ['начинаю', 'новичок', 'только начал', 'с нуля', 'не понимаю'],
             'advanced': ['опытный', 'senior', 'профессионал', 'эксперт', 'глубоко понимаю']
@@ -104,13 +97,10 @@ class SmartAI:
                 self.user_profile['skill_level'] = level
     
     def generate_smart_response(self, message):
-        """Генерация умного ответа с пониманием контекста"""
-        # Анализируем сообщение
         intents = self.analyze_intent(message)
         entities = self.extract_entities(message)
         self.update_user_profile(message, entities)
         
-        # Сохраняем в историю
         self.conversation_history.append({
             'message': message,
             'intents': intents,
@@ -118,98 +108,78 @@ class SmartAI:
             'timestamp': datetime.now()
         })
         
-        # Ограничиваем историю
         if len(self.conversation_history) > 10:
             self.conversation_history = self.conversation_history[-10:]
         
-        # Генерируем ответ на основе анализа
         return self._craft_response(message, intents, entities)
     
     def _craft_response(self, message, intents, entities):
-        """Создание осмысленного ответа"""
-        
-        # Приветствие
         if 'greeting' in intents:
             return self._generate_greeting()
         
-        # Прощание
         if 'farewell' in intents:
             return self._generate_farewell()
         
-        # Помощь
         if 'help' in intents:
             return self._generate_help_response()
         
-        # Запрос объяснения
         if 'explanation' in intents:
             return self._generate_explanation(message, entities)
         
-        # Запрос кода
         if 'code_request' in intents:
             return self._generate_code_example(message, entities)
         
-        # Сравнение
         if 'comparison' in intents:
             return self._generate_comparison(message, entities)
         
-        # Проблема
         if 'problem' in intents:
             return self._generate_problem_solution(message, entities)
         
-        # Мнение
         if 'opinion' in intents:
             return self._generate_opinion(message, entities)
         
-        # Путь обучения
         if 'learning_path' in intents:
             return self._generate_learning_path(entities)
         
-        # Карьера
         if 'career' in intents:
             return self._generate_career_advice(entities)
         
-        # Общий ответ с учетом контекста
         return self._generate_contextual_response(message, entities)
     
     def _generate_greeting(self):
-        """Генерация приветствия с учетом истории"""
         greetings = [
-            "Привет! Рад тебя видеть! Готов обсудить программирование! 🚀",
-            "Здравствуй! Как твои успехи в программировании? 💻",
-            "Приветствую! Что нового хочешь узнать сегодня? 📚",
-            "Привет! Готов к новым знаниям? Задавай вопросы! 🔥"
+            "👋 Привет! Я AI-GPT2 - твой умный помощник в программировании!",
+            "🚀 Здравствуй! AI-GPT2 готов к работе! Что хочешь узнать сегодня?",
+            "💻 Приветствую! AI-GPT2 активирован. Задавай вопросы!",
+            "🎯 Привет! AI-GPT2 онлайн. Готов обсудить программирование!"
         ]
         
-        # Если у нас есть история, персонализируем приветствие
         if len(self.conversation_history) > 1:
             last_topic = self._get_last_topic()
             if last_topic:
-                return f"Привет! Продолжаем обсуждать {last_topic}? И есть новые вопросы? 💭"
+                return f"👋 С возвращением! Продолжаем тему {last_topic}? Или есть новые вопросы?"
         
         return random.choice(greetings)
     
     def _generate_farewell(self):
-        """Генерация прощания"""
         farewells = [
-            "До свидания! Буду рад помочь снова! 👋",
-            "Пока! Удачи в программировании! 🍀",
-            "До встречи! Не стесняйся обращаться! 😊",
-            "Пока! Помни - практика ключ к успеху! 💪"
+            "👋 До свидания! AI-GPT2 будет ждать твоего возвращения!",
+            "🚀 Пока! Удачи в программировании от AI-GPT2!",
+            "💫 До встречи! AI-GPT2 всегда готов помочь!",
+            "🎯 Пока! Помни - AI-GPT2 твой верный помощник в коде!"
         ]
         return random.choice(farewells)
     
     def _generate_help_response(self):
-        """Умная помощь с учетом профиля пользователя"""
-        base_help = "Я могу:\n• Объяснять концепции программирования\n• Помогать с кодом и примерами\n• Сравнивать технологии\n• Советовать пути обучения\n• Решать проблемы\n\n"
+        base_help = "🤖 **AI-GPT2 может:**\n• Объяснять концепции программирования\n• Генерировать примеры кода\n• Сравнивать технологии\n• Помогать с карьерой\n• Решать проблемы\n\n"
         
         if self.user_profile['preferred_languages']:
             langs = ", ".join(self.user_profile['preferred_languages'])
-            base_help += f"Вижу, тебя интересуют: {langs}. Могу углубиться в эти темы! 🎯"
+            base_help += f"🎯 Вижу твои интересы: {langs}. Могу углубиться в эти темы!"
         
         return base_help
     
     def _generate_explanation(self, message, entities):
-        """Умное объяснение с учетом уровня пользователя"""
         if entities['concepts']:
             concept = entities['concepts'][0]
             return self._explain_concept(concept)
@@ -217,335 +187,174 @@ class SmartAI:
             language = entities['languages'][0]
             return self._explain_language(language)
         else:
-            return "Расскажи, что именно тебе нужно объяснить? Конкретную технологию, концепцию или что-то другое? 🤔"
+            return "🤔 AI-GPT2: Что именно тебе нужно объяснить? Конкретную технологию или концепцию?"
     
     def _explain_concept(self, concept):
-        """Объяснение концепций с учетом уровня пользователя"""
         explanations = {
             'ооп': {
-                'beginner': """🎯 **ООП для начинающих:**
+                'beginner': """🎯 **ООП от AI-GPT2:**
 
-Объектно-Ориентированное Программирование - это подход, где программа состоит из "объектов".
+Представь, что создаешь игру:
+• **Класс** = Чертеж персонажа
+• **Объект** = Конкретный персонаж  
+• **Свойства** = Характеристики
+• **Методы** = Действия
 
-Представь, что разрабатываешь игру:
-• **Класс** = Чертеж персонажа (например, "Игрок")
-• **Объект** = Конкретный персонаж (например, "Герой 1")
-• **Свойства** = Характеристики (имя, здоровье, уровень)
-• **Методы** = Действия (атаковать, лечиться, двигаться)
-
-Простой пример в Python:
 ```python
-class Player:
+class Hero:
     def __init__(self, name):
         self.name = name
         self.health = 100
     
     def attack(self):
         print(f"{self.name} атакует!")
-    
-    def take_damage(self, damage):
-        self.health -= damage
-        print(f"Здоровье: {self.health}")
 
-# Создаем объект
-hero = Player("Артур")
+hero = Hero("Артур")
 hero.attack()  # Артур атакует!
 ```""",
-                'intermediate': """⚡ **ООП: Основные принципы:**
+                'intermediate': """⚡ **ООП принципы от AI-GPT2:**
 
-1. **Инкапсуляция** - скрытие внутренней реализации
-2. **Наследование** - создание новых классов на основе существующих  
-3. **Полиморфизм** - разные реализации одного интерфейса
-4. **Абстракция** - работа на уровне концепций, а не деталей
+1. **Инкапсуляция** - скрытие деталей
+2. **Наследование** - расширение классов
+3. **Полиморфизм** - разные поведения
+4. **Абстракция** - работа с концепциями
 
-Пример наследования:
 ```python
 class Animal:
-    def speak(self):
-        pass
+    def speak(self): pass
 
 class Dog(Animal):
-    def speak(self):
-        return "Гав!"
+    def speak(self): return "Гав!"
 
-class Cat(Animal):
-    def speak(self):
-        return "Мяу!"
+class Cat(Animal):  
+    def speak(self): return "Мяу!"
 
-# Полиморфизм в действии
-animals = [Dog(), Cat()]
-for animal in animals:
-    print(animal.speak())  # Разное поведение!
-```"""
-            },
-            'алгоритмы': {
-                'beginner': """🔍 **Алгоритмы - это пошаговые инструкции**
-
-Представь, что ищешь книгу в библиотеке:
-• **Линейный поиск** - проверяешь каждую полку по порядку
-• **Бинарный поиск** - открываешь посередине, отбрасываешь половину
-
-Пример поиска в Python:
-```python
-# Линейный поиск (простой)
-def linear_search(items, target):
-    for i, item in enumerate(items):
-        if item == target:
-            return i
-    return -1
-
-# Бинарный поиск (эффективный для отсортированных данных)
-def binary_search(items, target):
-    low, high = 0, len(items)-1
-    while low <= high:
-        mid = (low + high) // 2
-        if items[mid] == target:
-            return mid
-        elif items[mid] < target:
-            low = mid + 1
-        else:
-            high = mid - 1
-    return -1
-```""",
-                'intermediate': """⚡ **Сложность алгоритмов (Big O)**
-
-• **O(1)** - Константная (доступ к элементу массива)
-• **O(log n)** - Логарифмическая (бинарный поиск)
-• **O(n)** - Линейная (линейный поиск)
-• **O(n²)** - Квадратичная (пузырьковая сортировка)
-
-Сравнение сортировок:
-```python
-# Пузырьковая O(n²) - медленная, но простая
-def bubble_sort(arr):
-    n = len(arr)
-    for i in range(n):
-        for j in range(0, n-i-1):
-            if arr[j] > arr[j+1]:
-                arr[j], arr[j+1] = arr[j+1], arr[j]
-
-# Быстрая сортировка O(n log n) - эффективная
-def quick_sort(arr):
-    if len(arr) <= 1:
-        return arr
-    pivot = arr[len(arr)//2]
-    left = [x for x in arr if x < pivot]
-    middle = [x for x in arr if x == pivot]
-    right = [x for x in arr if x > pivot]
-    return quick_sort(left) + middle + quick_sort(right)
+# Полиморфизм
+for animal in [Dog(), Cat()]:
+    print(animal.speak())
 ```"""
             }
         }
         
         if concept in explanations:
             level = self.user_profile['skill_level']
-            if level in explanations[concept]:
-                return explanations[concept][level]
-            return explanations[concept]['beginner']
+            return explanations[concept].get(level, explanations[concept]['beginner'])
         
-        return f"Концепция '{concept}' интересная! Расскажи, что именно хочешь узнать о ней? 🤔"
-    
-    def _explain_language(self, language):
-        """Объяснение языков программирования"""
-        languages_explanation = {
-            'python': """🐍 **Python - язык для всего!**
-
-**Сильные стороны:**
-• Простой и читаемый синтаксис
-• Отлично для начинающих
-• Мощные библиотеки для Data Science
-• Веб-фреймворки: Django, Flask
-• Автоматизация и скрипты
-
-**Идеален для:**
-• Начинающих программистов
-• Data Science и AI
-• Веб-разработки
-• Автоматизации задач
-
-**Пример:**
-```python
-# Простой и понятный код
-numbers = [1, 2, 3, 4, 5]
-squares = [x**2 for x in numbers]
-even_squares = [x for x in squares if x % 2 == 0]
-print(even_squares)  # [4, 16]
-```""",
-            
-            'javascript': """📜 **JavaScript - язык веба**
-
-**Сильные стороны:**
-• Работает в браузере
-• Универсальный (frontend + backend)
-• Огромная экосистема
-• Постоянно развивается
-
-**Идеален для:**
-• Веб-разработки
-• Интерактивных интерфейсов
-• Full-stack разработки
-
-**Пример:**
-```javascript
-// Современный JavaScript
-const users = [
-    { name: 'Alice', age: 25 },
-    { name: 'Bob', age: 30 }
-];
-
-// Функциональный подход
-const adultUsers = users
-    .filter(user => user.age >= 18)
-    .map(user => user.name);
-
-console.log(adultUsers); // ['Alice', 'Bob']
-```"""
-        }
-        
-        return languages_explanation.get(language, f"Язык {language} интересный! Что конкретно хочешь узнать? 💭")
+        return f"AI-GPT2: Концепция '{concept}' интересная! Что именно хочешь узнать?"
     
     def _generate_code_example(self, message, entities):
-        """Умная генерация примеров кода"""
         if entities['languages']:
             language = entities['languages'][0]
             return self._get_smart_code_example(language, message)
-        
-        # Если язык не указан, предлагаем варианты
-        return "Для какого языка нужен пример кода? Python, JavaScript, или может другой? 💻"
+        return "AI-GPT2: Для какого языка нужен пример кода?"
     
     def _get_smart_code_example(self, language, context):
-        """Умные примеры кода с учетом контекста"""
         context_lower = context.lower()
         
-        if 'ооп' in context_lower or 'класс' in context_lower:
-            return self._generate_oop_example(language)
-        elif 'функция' in context_lower or 'метод' in context_lower:
-            return self._generate_function_example(language)
-        elif 'обработка' in context_lower or 'данные' in context_lower:
-            return self._generate_data_processing_example(language)
-        else:
-            return self._generate_general_example(language)
-    
-    def _generate_oop_example(self, language):
-        """Пример ООП для разных языков"""
-        examples = {
-            'python': """```python
-# Современный Python класс с type hints
-from typing import List, Optional
-from dataclasses import dataclass
+        if 'ооп' in context_lower:
+            examples = {
+                'python': """```python
+# AI-GPT2: Современный Python класс
+from typing import List
 
-@dataclass
-class Product:
-    name: str
-    price: float
-    category: str
-    
-    def apply_discount(self, percent: float) -> float:
-        """Применяет скидку к товару"""
-        discount = self.price * (percent / 100)
-        return self.price - discount
-
-class ShoppingCart:
+class SmartCart:
     def __init__(self):
-        self.items: List[Product] = []
+        self.items: List[str] = []
     
-    def add_product(self, product: Product) -> None:
-        self.items.append(product)
+    def add_item(self, item: str) -> None:
+        self.items.append(item)
+        print(f"AI-GPT2: Добавлен {item}")
     
-    def total_price(self) -> float:
-        return sum(item.price for item in self.items)
-    
-    def get_products_by_category(self, category: str) -> List[Product]:
-        return [item for item in self.items if item.category == category]
+    def show_items(self) -> None:
+        print("AI-GPT2: В корзине:", self.items)
 
-# Использование
-laptop = Product("MacBook", 1500.0, "electronics")
-phone = Product("iPhone", 800.0, "electronics")
-
-cart = ShoppingCart()
-cart.add_product(laptop)
-cart.add_product(phone)
-
-print(f"Общая стоимость: ${cart.total_price():.2f}")
-print(f"Электроника в корзине: {len(cart.get_products_by_category('electronics'))}")
+cart = SmartCart()
+cart.add_item("Python Book")
+cart.add_item("Coffee")
+cart.show_items()
 ```""",
-            
-            'javascript': """```javascript
-// Современный JavaScript с классами
-class Product {
-    constructor(name, price, category) {
-        this.name = name;
-        this.price = price;
-        this.category = category;
-    }
-    
-    applyDiscount(percent) {
-        const discount = this.price * (percent / 100);
-        return this.price - discount;
-    }
-}
-
-class ShoppingCart {
+                'javascript': """```javascript
+// AI-GPT2: Современный JavaScript класс
+class SmartCart {
     constructor() {
         this.items = [];
     }
     
-    addProduct(product) {
-        this.items.push(product);
+    addItem(item) {
+        this.items.push(item);
+        console.log(`AI-GPT2: Добавлен ${item}`);
     }
     
-    totalPrice() {
-        return this.items.reduce((total, item) => total + item.price, 0);
-    }
-    
-    getProductsByCategory(category) {
-        return this.items.filter(item => item.category === category);
+    showItems() {
+        console.log("AI-GPT2: В корзине:", this.items);
     }
 }
 
-// Использование с современным синтаксисом
-const laptop = new Product("MacBook", 1500, "electronics");
-const phone = new Product("iPhone", 800, "electronics");
+const cart = new SmartCart();
+cart.addItem("JavaScript Book");
+cart.addItem("Coffee");
+cart.showItems();
+```"""
+            }
+            return examples.get(language, examples['python'])
+        
+        # Общий пример
+        examples = {
+            'python': """```python
+# AI-GPT2: Умная обработка данных
+def smart_data_processor(data):
+    \"\"\"AI-GPT2: Обрабатывает данные интеллектуально\"\"\"
+    if not data:
+        return "AI-GPT2: Данные пустые!"
+    
+    processed = [
+        f"Элемент {i}: {item}" 
+        for i, item in enumerate(data, 1)
+    ]
+    return processed
 
-const cart = new ShoppingCart();
-cart.addProduct(laptop);
-cart.addProduct(phone);
+# Использование
+data = ["Python", "AI", "Programming"]
+result = smart_data_processor(data)
+for item in result:
+    print(item)
+```""",
+            'javascript': """```javascript
+// AI-GPT2: Умный обработчик данных
+function smartDataProcessor(data) {
+    if (!data || data.length === 0) {
+        return "AI-GPT2: Данные пустые!";
+    }
+    
+    return data.map((item, index) => 
+        `AI-GPT2: Элемент ${index + 1}: ${item}`
+    );
+}
 
-console.log(`Общая стоимость: $${cart.totalPrice()}`);
-console.log(`Электроника в корзине: ${cart.getProductsByCategory("electronics").length}`);
+// Использование
+const data = ["JavaScript", "AI", "Coding"];
+const result = smartDataProcessor(data);
+result.forEach(item => console.log(item));
 ```"""
         }
-        
-        return examples.get(language, "Покажу пример ООП на Python! 🐍\n" + examples['python'])
+        return examples.get(language, "AI-GPT2: Вот пример на Python!\n" + examples['python'])
     
     def _generate_contextual_response(self, message, entities):
-        """Контекстный ответ, когда намерение не ясно"""
-        # Анализируем историю для понимания контекста
         if len(self.conversation_history) > 1:
-            last_intent = self.conversation_history[-2].get('intents', [])
             last_entities = self.conversation_history[-2].get('entities', {})
-            
-            # Продолжаем предыдущую тему
             if last_entities.get('languages') or last_entities.get('concepts'):
-                return "Продолжаем предыдущий разговор? Или есть новый вопрос? 💭"
+                return "AI-GPT2: Продолжаем предыдущую тему? Или есть новый вопрос? 💭"
         
-        # Персонализированный ответ на основе профиля
-        if self.user_profile['preferred_languages']:
-            langs = ", ".join(self.user_profile['preferred_languages'])
-            return f"Вижу, тебе интересны {langs}. Хочешь углубиться в эти темы или спросишь о чём-то новом? 🎯"
-        
-        # Общий умный ответ
-        thoughtful_responses = [
-            "Интересный вопрос! Давай разберёмся вместе. Что именно тебя интересует? 🤔",
-            "Хочешь, чтобы я объяснил это подробно? Или может быть есть другие вопросы? 💡",
-            "Это хорошая тема для обсуждения! Расскажи, что конкретно хочешь узнать? 🚀",
-            "Понимаю твой интерес! Давай я помогу разобраться в этом вопросе. 📚"
+        responses = [
+            "AI-GPT2: Интересный вопрос! Давай разберём его вместе. 🤔",
+            "AI-GPT2: Хочешь, чтобы я объяснил это подробно? 💡", 
+            "AI-GPT2: Хорошая тема! Что конкретно интересует? 🚀",
+            "AI-GPT2: Понимаю твой интерес! Помогу разобраться. 📚"
         ]
         
-        return random.choice(thoughtful_responses)
+        return random.choice(responses)
     
     def _get_last_topic(self):
-        """Получение последней темы из истории"""
         if len(self.conversation_history) < 2:
             return None
         
@@ -585,111 +394,154 @@ class AIHandler(BaseHTTPRequestHandler):
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>🧠 Умный ИИ Чат</title>
+            <title>AI-GPT2 🚀</title>
             <style>
                 body { 
                     font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
                     max-width: 600px; 
                     margin: 0 auto; 
                     padding: 20px; 
-                    background: #f0f2f5;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
                 }
                 .chat-container {
                     background: white;
-                    border-radius: 15px;
+                    border-radius: 20px;
+                    padding: 25px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                    height: 90vh;
+                    display: flex;
+                    flex-direction: column;
+                }
+                .header {
+                    text-align: center;
+                    margin-bottom: 20px;
+                    background: linear-gradient(135deg, #2c3e50, #3498db);
+                    color: white;
                     padding: 20px;
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+                    border-radius: 15px;
+                    margin: -25px -25px 20px -25px;
+                }
+                .header h1 {
+                    margin: 0;
+                    font-size: 2.2em;
+                    font-weight: 700;
+                }
+                .header p {
+                    margin: 5px 0 0 0;
+                    opacity: 0.9;
+                    font-size: 1.1em;
                 }
                 #chat {
-                    height: 400px;
-                    border: 1px solid #e1e5e9;
-                    border-radius: 10px;
-                    padding: 15px;
-                    margin-bottom: 15px;
+                    flex: 1;
+                    border: 2px solid #e1e5e9;
+                    border-radius: 15px;
+                    padding: 20px;
+                    margin-bottom: 20px;
                     overflow-y: auto;
-                    background: #fafbfc;
+                    background: #f8f9fa;
                 }
                 .message {
-                    margin: 12px 0;
-                    padding: 12px 16px;
-                    border-radius: 12px;
+                    margin: 15px 0;
+                    padding: 15px 20px;
+                    border-radius: 18px;
                     max-width: 85%;
                     line-height: 1.5;
+                    animation: fadeIn 0.3s ease;
+                }
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
                 }
                 .user {
                     background: linear-gradient(135deg, #007bff, #0056b3);
                     color: white;
                     margin-left: auto;
                     text-align: right;
+                    border-bottom-right-radius: 5px;
                 }
                 .ai {
-                    background: #ffffff;
-                    color: #1a1a1a;
-                    border: 1px solid #e1e5e9;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    background: white;
+                    color: #2c3e50;
+                    border: 2px solid #3498db;
+                    border-bottom-left-radius: 5px;
+                    box-shadow: 0 2px 10px rgba(52, 152, 219, 0.2);
                 }
                 .input-area {
                     display: flex;
-                    gap: 10px;
+                    gap: 12px;
+                    align-items: center;
                 }
                 #messageInput {
                     flex: 1;
-                    padding: 12px 16px;
-                    border: 2px solid #e1e5e9;
+                    padding: 15px 20px;
+                    border: 2px solid #bdc3c7;
                     border-radius: 25px;
                     font-size: 16px;
                     outline: none;
-                    transition: border-color 0.3s;
+                    transition: all 0.3s;
+                    background: white;
                 }
                 #messageInput:focus {
-                    border-color: #007bff;
+                    border-color: #3498db;
+                    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
                 }
                 button {
-                    padding: 12px 24px;
-                    background: linear-gradient(135deg, #007bff, #0056b3);
+                    padding: 15px 25px;
+                    background: linear-gradient(135deg, #e74c3c, #c0392b);
                     color: white;
                     border: none;
                     border-radius: 25px;
                     cursor: pointer;
                     font-size: 16px;
                     font-weight: 600;
-                    transition: transform 0.2s;
+                    transition: all 0.3s;
+                    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
                 }
                 button:hover {
-                    transform: translateY(-1px);
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
                 }
                 .code-block {
-                    background: #1e1e1e;
-                    color: #d4d4d4;
+                    background: #2c3e50;
+                    color: #ecf0f1;
                     padding: 15px;
-                    border-radius: 8px;
+                    border-radius: 10px;
                     margin: 10px 0;
                     font-family: 'Courier New', monospace;
                     white-space: pre-wrap;
                     overflow-x: auto;
-                    border-left: 4px solid #007bff;
+                    border-left: 4px solid #e74c3c;
                 }
-                .typing {
-                    color: #666;
-                    font-style: italic;
-                    padding: 10px;
+                .ai-label {
+                    font-weight: 600;
+                    color: #3498db;
+                    margin-bottom: 5px;
+                }
+                .user-label {
+                    font-weight: 600;
+                    color: white;
+                    margin-bottom: 5px;
                 }
             </style>
         </head>
         <body>
             <div class="chat-container">
-                <h1>🧠 Умный ИИ Чат</h1>
-                <p><em>ИИ, который понимает контекст и учится на беседе</em></p>
+                <div class="header">
+                    <h1>🚀 AI-GPT2</h1>
+                    <p>Умный помощник для программирования</p>
+                </div>
                 
                 <div id="chat">
                     <div class="message ai">
-                        <strong>🧠 Умный ИИ:</strong><br>
-                        Привет! Я не просто отвечаю на вопросы - я понимаю контекст, запоминаю твои интересы и подстраиваюсь под твой уровень. Начнём общение! 🚀
+                        <div class="ai-label">🧠 AI-GPT2</div>
+                        Привет! Я AI-GPT2 - твой интеллектуальный помощник в мире программирования. 
+                        Готов отвечать на вопросы, генерировать код и помогать с обучением! 🚀
                     </div>
                 </div>
                 
                 <div class="input-area">
-                    <input type="text" id="messageInput" placeholder="Спроси о чём угодно в программировании...">
+                    <input type="text" id="messageInput" placeholder="Спроси AI-GPT2 о программировании...">
                     <button onclick="sendMessage()">Отправить</button>
                 </div>
             </div>
@@ -700,7 +552,6 @@ class AIHandler(BaseHTTPRequestHandler):
                     const message = document.createElement('div');
                     message.className = isUser ? 'message user' : 'message ai';
                     
-                    // Форматируем код блоки
                     let formattedText = text;
                     if (text.includes('```')) {
                         formattedText = text.replace(/```(\\w+)?\\n([\\s\\S]*?)```/g, '<div class="code-block">$2</div>');
@@ -708,9 +559,9 @@ class AIHandler(BaseHTTPRequestHandler):
                     formattedText = formattedText.replace(/\\n/g, '<br>');
                     
                     if (isUser) {
-                        message.innerHTML = '<strong>👤 Вы:</strong><br>' + formattedText;
+                        message.innerHTML = '<div class="user-label">👤 Вы</div>' + formattedText;
                     } else {
-                        message.innerHTML = '<strong>🧠 ИИ:</strong><br>' + formattedText;
+                        message.innerHTML = '<div class="ai-label">🧠 AI-GPT2</div>' + formattedText;
                     }
                     
                     chat.appendChild(message);
@@ -737,7 +588,7 @@ class AIHandler(BaseHTTPRequestHandler):
                         addMessage(data.response, false);
                         
                     } catch (error) {
-                        addMessage('❌ Ошибка соединения', false);
+                        addMessage('❌ AI-GPT2: Ошибка соединения', false);
                     }
                 }
 
@@ -759,7 +610,6 @@ class AIHandler(BaseHTTPRequestHandler):
             data = json.loads(post_data.decode('utf-8'))
             message = data.get('message', '')
             
-            # Умный ответ от ИИ
             response = self.ai.generate_smart_response(message)
             
             self.send_response(200)
@@ -780,24 +630,23 @@ class AIHandler(BaseHTTPRequestHandler):
         self.end_headers()
     
     def log_message(self, format, *args):
-        print(f"🌐 {format % args}")
+        print(f"🚀 AI-GPT2: {format % args}")
 
 if __name__ == '__main__':
     HOST = '0.0.0.0'
     PORT = 8000
     
-    print("🧠 Запуск УМНОГО ИИ Чата...")
+    print("🚀 ЗАПУСК AI-GPT2...")
+    print("╔══════════════════════════════════════╗")
+    print("║             AI-GPT2 1.0             ║")
+    print("║    Умный помощник программиста      ║")
+    print("╚══════════════════════════════════════╝")
     print(f"📍 Сервер: http://localhost:{PORT}")
-    print("\n🎯 ОСОБЕННОСТИ УМНОГО ИИ:")
-    print("• 📝 Понимает намерения и контекст")
-    print("• 🧠 Запоминает интересы пользователя") 
-    print("• 🎯 Подстраивается под уровень знаний")
-    print("• 💭 Анализирует историю диалога")
-    print("• 🔄 Учится в процессе общения")
+    print("🎯 Готов к интеллектуальному общению!")
     
     try:
         server = HTTPServer((HOST, PORT), AIHandler)
-        print(f"\n✅ Умный ИИ запущен на {HOST}:{PORT}")
+        print(f"✅ AI-GPT2 активирован на {HOST}:{PORT}")
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n🛑 Сервер остановлен")
+        print("\n🛑 AI-GPT2 деактивирован")
