@@ -460,7 +460,7 @@ class SmartAI:
     def _generate_oop_example(self, language):
         """Генерация ООП примера на разных языках"""
         examples = {
-            'python': """```python
+            'python': """```python,
 # AI-GPT2: Класс для управления банковским счетом
 class BankAccount:
     def __init__(self, owner: str, balance: float = 0.0):
