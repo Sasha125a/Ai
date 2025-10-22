@@ -425,10 +425,170 @@ class SmartAI:
             'web_searches': 0,
             'unanswered_questions': 0
         }
+        self.russian_vocabulary = self._load_russian_vocabulary()
+    
+    def _load_russian_vocabulary(self):
+        """Загрузка русской лексики из текстового файла"""
+        vocabulary = {
+            'nouns': [],
+            'verbs': [], 
+            'adjectives': [],
+            'adverbs': [],
+            'questions': [],
+            'technical_terms': []
+        }
+        
+        try:
+            # Пробуем разные возможные имена файлов
+            possible_files = [
+                'russian_words.txt',
+                'russian_vocabulary.txt', 
+                'vocabulary.txt',
+                'словарь.txt',
+                'lexicon.txt'
+            ]
+            
+            vocab_file = None
+            for file_name in possible_files:
+                if os.path.exists(file_name):
+                    vocab_file = file_name
+                    break
+            
+            if vocab_file:
+                print(f"📖 Загружаю русскую лексику из: {vocab_file}")
+                
+                with open(vocab_file, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                
+                current_category = None
+                
+                for line in lines:
+                    line = line.strip()
+                    
+                    if not line or line.startswith('#'):
+                        continue
+                    
+                    # Определяем категории
+                    if line.lower().startswith('существительные:'):
+                        current_category = 'nouns'
+                        continue
+                    elif line.lower().startswith('глаголы:'):
+                        current_category = 'verbs'
+                        continue
+                    elif line.lower().startswith('прилагательные:'):
+                        current_category = 'adjectives'
+                        continue
+                    elif line.lower().startswith('наречия:'):
+                        current_category = 'adverbs'
+                        continue
+                    elif line.lower().startswith('вопросы:'):
+                        current_category = 'questions'
+                        continue
+                    elif line.lower().startswith('технические_термины:'):
+                        current_category = 'technical_terms'
+                        continue
+                    
+                    # Добавляем слова в соответствующую категорию
+                    if current_category and line:
+                        words = [word.strip() for word in line.split(',')]
+                        vocabulary[current_category].extend(words)
+                
+                print(f"✅ Загружено лексики: "
+                      f"существительных - {len(vocabulary['nouns'])}, "
+                      f"глаголов - {len(vocabulary['verbs'])}, "
+                      f"прилагательных - {len(vocabulary['adjectives'])}")
+                
+            else:
+                print("⚠️ Файл с русской лексикой не найден. Создаю базовый словарь...")
+                vocabulary = self._create_basic_vocabulary()
+                
+        except Exception as e:
+            print(f"❌ Ошибка загрузки словаря: {e}")
+            vocabulary = self._create_basic_vocabulary()
+        
+        return vocabulary
+    
+    def _create_basic_vocabulary(self):
+        """Создание базового словаря если файл не найден"""
+        return {
+            'nouns': [
+                'программа', 'код', 'функция', 'класс', 'объект', 'алгоритм', 'данные',
+                'система', 'технология', 'информация', 'знание', 'вопрос', 'ответ',
+                'проблема', 'решение', 'метод', 'способ', 'пример', 'объяснение'
+            ],
+            'verbs': [
+                'создать', 'написать', 'использовать', 'работать', 'изучить', 'объяснить',
+                'понять', 'сделать', 'решить', 'настроить', 'запустить', 'проверить',
+                'анализировать', 'разобраться', 'помочь', 'научиться'
+            ],
+            'adjectives': [
+                'хороший', 'плохой', 'новый', 'старый', 'быстрый', 'медленный', 'простой',
+                'сложный', 'интересный', 'важный', 'основной', 'дополнительный', 'лучший',
+                'худший', 'технический', 'программный'
+            ],
+            'adverbs': [
+                'быстро', 'медленно', 'правильно', 'неправильно', 'легко', 'сложно',
+                'эффективно', 'качественно', 'подробно', 'кратко'
+            ],
+            'questions': [
+                'что', 'как', 'почему', 'зачем', 'когда', 'где', 'кто', 'какой',
+                'сколько', 'насколько', 'каким образом'
+            ],
+            'technical_terms': [
+                'программирование', 'разработка', 'интерфейс', 'база данных', 'сервер',
+                'клиент', 'браузер', 'компиляция', 'отладка', 'тестирование', 'деплой'
+            ]
+        }
+    
+    def _analyze_question_with_vocabulary(self, message):
+        """Углубленный анализ вопроса с использованием словаря"""
+        message_lower = message.lower()
+        analysis = {
+            'contains_technical_terms': False,
+            'action_verbs': [],
+            'main_subjects': [],
+            'question_words': [],
+            'complexity_level': 'basic'
+        }
+        
+        # Поиск технических терминов
+        for term in self.russian_vocabulary['technical_terms']:
+            if term in message_lower:
+                analysis['contains_technical_terms'] = True
+                analysis['main_subjects'].append(term)
+        
+        # Поиск глаголов действий
+        for verb in self.russian_vocabulary['verbs']:
+            if verb in message_lower:
+                analysis['action_verbs'].append(verb)
+        
+        # Поиск вопросных слов
+        for question_word in self.russian_vocabulary['questions']:
+            if question_word in message_lower:
+                analysis['question_words'].append(question_word)
+        
+        # Поиск существительных (основных субъектов)
+        for noun in self.russian_vocabulary['nouns']:
+            if noun in message_lower and noun not in analysis['main_subjects']:
+                analysis['main_subjects'].append(noun)
+        
+        # Определение сложности вопроса
+        word_count = len(message.split())
+        unique_terms = len(set(analysis['main_subjects'] + analysis['action_verbs']))
+        
+        if unique_terms >= 3 or word_count > 8:
+            analysis['complexity_level'] = 'advanced'
+        elif unique_terms >= 2 or word_count > 5:
+            analysis['complexity_level'] = 'intermediate'
+        
+        return analysis
     
     def generate_smart_response(self, message):
         intents = self.learning_ai.classifier.predict(message)
         entities = self.extract_entities(message)
+        
+        # Углубленный анализ с использованием словаря
+        vocab_analysis = self._analyze_question_with_vocabulary(message)
         
         primary_intent = intents[0] if intents else "unknown"
         
@@ -441,7 +601,7 @@ class SmartAI:
             if source == "web_search":
                 self.learning_stats['web_searches'] += 1
         else:
-            final_response = self._analyze_and_respond(message, intents, entities)
+            final_response = self._analyze_and_respond(message, intents, entities, vocab_analysis)
             source = "generated"
             self.learning_stats['unanswered_questions'] += 1
         
@@ -457,6 +617,7 @@ class SmartAI:
             'response': final_response,
             'source': source,
             'confidence': confidence,
+            'vocab_analysis': vocab_analysis,
             'timestamp': datetime.now()
         })
         
@@ -475,7 +636,7 @@ class SmartAI:
         
         return final_response
     
-    def _analyze_and_respond(self, message, intents, entities):
+    def _analyze_and_respond(self, message, intents, entities, vocab_analysis):
         """Универсальный анализ вопроса и генерация ответа"""
         
         # Обработка стандартных интентов
@@ -486,19 +647,98 @@ class SmartAI:
         elif 'help' in intents:
             return "Я могу помочь с различными вопросами: программирование, технологии, обучение, объяснение концепций. Просто спросите! 💡"
         
-        message_lower = message.lower()
-        
         # Анализ типа вопроса
         question_type = self._analyze_question_type(message)
         main_topic = self._extract_main_topic(message)
         
-        # Генерация ответа на основе анализа
-        response = self._generate_contextual_response(message, question_type, main_topic, intents)
+        # Генерация ответа на основе углубленного анализа
+        response = self._generate_enhanced_response(message, question_type, main_topic, vocab_analysis)
         
         # Сохраняем вопрос для обучения
         self._add_question_to_learning_queue(message, intents)
         
         return response
+    
+    def _generate_enhanced_response(self, message, question_type, main_topic, vocab_analysis):
+        """Улучшенная генерация ответа с использованием словаря"""
+        
+        # Базовые ответы по типам вопросов
+        base_responses = {
+            'explanation': [
+                "💡 **Запрос на объяснение**\n\nПонял, что вам нужно разъяснение по этой теме. Анализирую вопрос для качественного ответа.",
+                "🎓 **Объяснение концепции**\n\nИнтересный запрос! Изучаю тему чтобы дать понятное объяснение.",
+                "🧠 **Понимание темы**\n\nЗапомнил ваш вопрос. Готовлю развернутое объяснение."
+            ],
+            'how_to': [
+                "🛠️ **Практический вопрос**\n\nПонимаю, что нужна инструкция. Анализирую лучшие способы решения.",
+                "📋 **Инструкция**\n\nЗаписал ваш практический запрос! Готовлю пошаговое руководство.",
+                "🔧 **Решение задачи**\n\nПонял, что нужно решение. Изучаю эффективные методы."
+            ],
+            'comparison': [
+                "⚖️ **Сравнительный анализ**\n\nИнтересное сравнение! Анализирую различия и особенности.",
+                "📊 **Сопоставление**\n\nВопрос на сравнение добавлен в учебную базу. Готовлю детальный анализ.",
+                "🔍 **Анализ различий**\n\nЗапомнил ваш запрос на сравнение. Изучаю тему для качественного ответа."
+            ],
+            'reason': [
+                "🤔 **Поиск причин**\n\nИнтересно узнать причины! Анализирую факторы и зависимости.",
+                "🔎 **Исследование причин**\n\nВопрос 'почему' всегда важен! Изучаю причинно-следственные связи.",
+                "💭 **Понимание мотивации**\n\nЗаписал ваш вопрос о причинах. Анализирую логику процесса."
+            ],
+            'code': [
+                "💻 **Запрос кода**\n\nПонял, что нужен пример кода. Изучаю тему для качественного решения.",
+                "🚀 **Программирование**\n\nЗапомнил ваш технический запрос! Готовлю полезные примеры кода.",
+                "📝 **Разработка**\n\nВопрос по программированию добавлен в учебную базу."
+            ],
+            'fact': [
+                "📚 **Фактологический вопрос**\n\nИнтересный запрос фактов! Ищу точную информацию.",
+                "🎯 **Конкретный вопрос**\n\nЗапомнил ваш вопрос! Анализирую для предоставления точных данных.",
+                "📈 **Информационный запрос**\n\nПонял, что нужны конкретные данные. Изучаю тему."
+            ],
+            'general': [
+                "🌟 **Новый вопрос**\n\nСпасибо за вопрос! Тщательно его изучаю и добавляю в учебную базу.",
+                "🎓 **Обучение**\n\nИнтересный вопрос! Анализирую тему для будущих развернутых ответов.",
+                "💫 **Развитие**\n\nЗаписал ваш вопрос! Благодаря таким вопросам я становлюсь умнее."
+            ]
+        }
+        
+        # Выбираем базовый ответ
+        topic_responses = base_responses.get(question_type, base_responses['general'])
+        base_response = random.choice(topic_responses)
+        
+        # Добавляем детали из анализа словаря
+        enhanced_response = self._enhance_with_vocabulary_analysis(
+            base_response, message, vocab_analysis
+        )
+        
+        return enhanced_response
+    
+    def _enhance_with_vocabulary_analysis(self, base_response, message, vocab_analysis):
+        """Улучшение ответа на основе анализа словаря"""
+        
+        response_parts = [base_response]
+        
+        # Добавляем информацию о технических терминах
+        if vocab_analysis['contains_technical_terms'] and vocab_analysis['main_subjects']:
+            subjects = ", ".join(vocab_analysis['main_subjects'][:3])
+            response_parts.append(f"\n🔬 **Технические термины:** {subjects}")
+        
+        # Добавляем информацию о действиях
+        if vocab_analysis['action_verbs']:
+            actions = ", ".join(vocab_analysis['action_verbs'][:2])
+            response_parts.append(f"🎯 **Действия:** {actions}")
+        
+        # Добавляем оценку сложности
+        if vocab_analysis['complexity_level'] == 'advanced':
+            response_parts.append("📊 **Сложность:** Продвинутый уровень")
+        elif vocab_analysis['complexity_level'] == 'intermediate':
+            response_parts.append("📊 **Сложность:** Средний уровень")
+        
+        # Добавляем обещание улучшения
+        if vocab_analysis['main_subjects']:
+            main_subject = vocab_analysis['main_subjects'][0]
+            response_parts.append(f"\n✨ **Обещание:** Следующий раз подробно разберу тему '{main_subject}'!")
+        
+        return "\n".join(response_parts)
     
     def _analyze_question_type(self, message):
         """Анализ типа вопроса"""
@@ -526,7 +766,6 @@ class SmartAI:
             ])
         }
         
-        # Возвращаем первый подходящий тип
         for q_type, matches in question_types.items():
             if matches:
                 return q_type
@@ -537,85 +776,16 @@ class SmartAI:
         """Извлечение основной темы вопроса"""
         message_lower = message.lower()
         
-        # Темы и их ключевые слова
-        topics = {
-            'программирование': [
-                'python', 'javascript', 'java', 'программир', 'код', 'функция', 'класс',
-                'алгоритм', 'ооп', 'база данных', 'веб', 'приложение'
-            ],
-            'технологии': [
-                'компьютер', 'телефон', 'интернет', 'сеть', 'wi-fi', 'bluetooth',
-                'процессор', 'память', 'жесткий диск', 'видеокарта'
-            ],
-            'обучение': [
-                'учить', 'обучение', 'курс', 'урок', 'самоучка', 'начать изучать',
-                'лучший способ', 'метод обучения'
-            ],
-            'наука': [
-                'физика', 'химия', 'математика', 'биология', 'наука', 'исследование'
-            ],
-            'искусственный интеллект': [
-                'ии', 'ai', 'нейросеть', 'машинное обучение', 'бот', 'чат'
-            ],
-            'работа': [
-                'работа', 'карьера', 'зарплата', 'профессия', 'должность'
-            ]
-        }
+        # Используем словарь для определения темы
+        for noun in self.russian_vocabulary['nouns']:
+            if noun in message_lower:
+                return noun
         
-        for topic, keywords in topics.items():
-            if any(keyword in message_lower for keyword in keywords):
-                return topic
+        for tech_term in self.russian_vocabulary['technical_terms']:
+            if tech_term in message_lower:
+                return tech_term
         
-        return 'общее'
-    
-    def _generate_contextual_response(self, message, question_type, main_topic, intents):
-        """Генерация контекстного ответа"""
-        
-        responses = {
-            'explanation': [
-                f"💡 **Вопрос про '{self._extract_subject(message)}'**\n\nПонял, что вас интересует объяснение этой темы. Сейчас анализирую информацию, чтобы дать качественный ответ. Изучаю этот вопрос для будущих бесед! 📚",
-                f"🎓 **Объяснение концепции**\n\nИнтересный запрос на объяснение! Сохраняю его в учебную базу. В следующий раз смогу рассказать подробнее о '{self._extract_subject(message)}'.",
-                f"🧠 **Понимание темы**\n\nЗапомнил ваш вопрос про '{self._extract_subject(message)}'. Анализирую эту тему, чтобы в будущем давать развернутые объяснения."
-            ],
-            'how_to': [
-                f"🛠️ **Практический вопрос**\n\nПонимаю, что хотите разобраться как что-то сделать. Вопрос '{self._extract_subject(message)}' добавлен в список для изучения. Скогда разберусь - смогу дать пошаговое руководство!",
-                f"📋 **Инструкция**\n\nЗаписал ваш практический вопрос! Изучаю тему '{self._extract_subject(message)}' чтобы в будущем предоставлять четкие инструкции.",
-                f"🔧 **Решение задачи**\n\nПонял, что нужно решение для '{self._extract_subject(message)}'. Анализирую лучшие подходы. Возвращайтесь позже - подготовлю подробный ответ!"
-            ],
-            'comparison': [
-                f"⚖️ **Сравнительный анализ**\n\nИнтересное сравнение '{self._extract_comparison_subjects(message)}'! Изучаю различия и особенности. Скоро смогу предоставить детальный анализ.",
-                f"📊 **Сопоставление**\n\nВопрос на сравнение добавлен в учебную базу. Анализирую '{self._extract_comparison_subjects(message)}' для будущих развернутых ответов.",
-                f"🔍 **Анализ различий**\n\nЗапомнил ваш запрос на сравнение. Изучаю тему чтобы давать качественные сравнительные характеристики."
-            ],
-            'reason': [
-                f"🤔 **Поиск причин**\n\nИнтересно, почему '{self._extract_subject(message)}'? Анализирую причины и факторы. Этот вопрос поможет мне лучше понимать логику различных процессов.",
-                f"🔎 **Исследование причин**\n\nВопрос 'почему' всегда важен для понимания! Изучаю тему '{self._extract_subject(message)}' чтобы раскрыть все причинно-следственные связи.",
-                f"💭 **Понимание мотивации**\n\nЗаписал ваш вопрос о причинах. Анализирую '{self._extract_subject(message)}' для глубокого понимания темы."
-            ],
-            'code': [
-                f"💻 **Запрос кода**\n\nПонял, что нужен пример кода для '{self._extract_subject(message)}'. Изучаю эту тему чтобы в будущем предоставлять качественные программные решения.",
-                f"🚀 **Программирование**\n\nЗапомнил ваш технический запрос! Анализирую '{self._extract_subject(message)}' для создания полезных примеров кода.",
-                f"📝 **Разработка**\n\nВопрос по программированию добавлен в учебную базу. Готовлю материалы по теме '{self._extract_subject(message)}'."
-            ],
-            'fact': [
-                f"📚 **Фактологический вопрос**\n\nИнтересный запрос фактов! Ищу информацию по теме '{self._extract_subject(message)}'. Скоро смогу дать точный ответ.",
-                f"🎯 **Конкретный вопрос**\n\nЗапомнил ваш вопрос! Анализирую '{self._extract_subject(message)}' чтобы предоставить точные данные и факты.",
-                f"📈 **Информационный запрос**\n\nПонял, что нужны конкретные данные. Изучаю тему '{self._extract_subject(message)}' для будущих точных ответов."
-            ],
-            'general': [
-                f"🌟 **Новый вопрос**\n\nСпасибо за вопрос! Я внимательно его изучил и добавил в свою учебную базу. Тема '{self._extract_subject(message)}' теперь в процессе изучения.",
-                f"🎓 **Обучение**\n\nИнтересный вопрос! Я анализирую '{self._extract_subject(message)}' и скоро смогу давать развернутые ответы по этой теме.",
-                f"💫 **Развитие**\n\nЗаписал ваш вопрос! Благодаря таким вопросам я становлюсь умнее. Тема '{self._extract_subject(message)}' добавлена в программу обучения."
-            ]
-        }
-        
-        # Выбираем ответ в зависимости от типа вопроса
-        topic_responses = responses.get(question_type, responses['general'])
-        
-        # Добавляем тему в ответ
-        response = random.choice(topic_responses)
-        
-        return response
+        return self._extract_subject(message)
     
     def _extract_subject(self, message):
         """Извлечение основного субъекта вопроса"""
@@ -624,11 +794,11 @@ class SmartAI:
         # Удаляем вопросительные слова
         question_words = ['что', 'как', 'почему', 'зачем', 'кто', 'где', 'когда', 'сколько']
         words = message_lower.split()
-        filtered_words = [word for word in words if word not in question_words]
+        filtered_words = [word for word in words if word not in question_words and len(word) > 3]
         
         if filtered_words:
             # Берем первые 3-4 значимых слова
-            subject = ' '.join(filtered_words[:4])
+            subject = ' '.join(filtered_words[:3])
             return subject.capitalize()
         
         return "эту тему"
@@ -681,7 +851,8 @@ class SmartAI:
         entities = {
             'languages': [],
             'concepts': [],
-            'technologies': []
+            'technologies': [],
+            'vocabulary_terms': []
         }
         
         message_lower = message.lower()
@@ -698,7 +869,24 @@ class SmartAI:
             if concept in message_lower:
                 entities['concepts'].append(concept)
         
+        # Термины из словаря
+        for category, terms in self.russian_vocabulary.items():
+            for term in terms:
+                if term in message_lower and term not in entities['vocabulary_terms']:
+                    entities['vocabulary_terms'].append(term)
+        
         return entities
+    
+    def get_vocabulary_stats(self):
+        """Получение статистики словаря"""
+        return {
+            'total_nouns': len(self.russian_vocabulary['nouns']),
+            'total_verbs': len(self.russian_vocabulary['verbs']),
+            'total_adjectives': len(self.russian_vocabulary['adjectives']),
+            'total_adverbs': len(self.russian_vocabulary['adverbs']),
+            'total_technical_terms': len(self.russian_vocabulary['technical_terms']),
+            'total_questions': len(self.russian_vocabulary['questions'])
+        }
     
     def get_learning_stats(self):
         """Получение статистики"""
@@ -707,7 +895,8 @@ class SmartAI:
             'knowledge_base_entries': self.learning_stats['knowledge_base_entries'],
             'web_searches': self.learning_stats['web_searches'],
             'unanswered_questions': self.learning_stats['unanswered_questions'],
-            'conversation_history_length': len(self.conversation_history)
+            'conversation_history_length': len(self.conversation_history),
+            'vocabulary_stats': self.get_vocabulary_stats()
         }
         return stats
     
@@ -732,10 +921,22 @@ class AIHandler(BaseHTTPRequestHandler):
             self._serve_html()
         elif self.path == '/stats':
             self._serve_stats()
+        elif self.path == '/vocab-stats':
+            self._serve_vocab_stats()
         elif self.path == '/export':
             self._export_knowledge()
         else:
             self.send_error(404, "Not Found")
+    
+    def _serve_vocab_stats(self):
+        """Отдача статистики словаря"""
+        vocab_stats = self.ai.get_vocabulary_stats()
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        
+        self.wfile.write(json.dumps(vocab_stats).encode('utf-8'))
     
     def do_POST(self):
         if self.path == '/chat':
