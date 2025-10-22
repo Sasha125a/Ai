@@ -399,14 +399,14 @@ class EnhancedLearningAI:
                 )
                 return info_answer, "generated"
             
-    except Exception as e:
-        print(f"❌ Ошибка веб-поиска: {e}")
-        error_answer = (
-            f"**⚠️ Произошла ошибка при поиске**\n\n"
-            f"Не удалось выполнить поиск в интернете. "
-            f"Попробуйте повторить запрос позже или задать другой вопрос."
-        )
-        return error_answer, "generated"
+        except Exception as e:
+            print(f"❌ Ошибка веб-поиска: {e}")
+            error_answer = (
+                f"**⚠️ Произошла ошибка при поиске**\n\n"
+                f"Не удалось выполнить поиск в интернете. "
+                f"Попробуйте повторить запрос позже или задать другой вопрос."
+            )
+            return error_answer, "generated"
     
     def _generate_web_fallback_response(self, user_message, intent):
         """Генерация ответа когда даже интернет не помог"""
