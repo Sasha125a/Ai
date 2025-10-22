@@ -1,50 +1,382 @@
-def min_max(numbers):
-    return min(numbers), max(numbers)
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
+import re
+import random
+import os
+from datetime import datetime
+import requests
+import urllib.parse
+import nltk
+import ssl
 
-minimum, maximum = min_max([3, 1, 4, 1, 5, 9, 2])
-print(f"Min: {minimum}, Max: {maximum}")
-```"""
+# Обход SSL для NLTK
+try:
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
+else:
+    ssl._create_default_https_context = _create_unverified_https_context
 
-    def _provide_problem_solving_advice(self, user_message, keywords):
-        """Советы по решению проблем"""
-        advice = [
-            "**Шаги решения проблемы:**\n1. Четко определите проблему\n2. Разбейте на меньшие части\n3. Ищите похожие решения\n4. Тестируйте постепенно\n5. Анализируйте ошибки",
+# Загрузка данных NLTK
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+
+class SimpleClassifier:
+    """Простой классификатор на основе ключевых слов"""
+    
+    def __init__(self):
+        self.patterns = {
+            'greeting': ['привет', 'здравствуй', 'hello', 'hi', 'добрый', 'здравствуйте'],
+            'farewell': ['пока', 'до свидания', 'bye', 'прощай', 'до встречи'],
+            'help': ['помощь', 'help', 'что ты умеешь', 'функции'],
+            'explanation': ['объясни', 'расскажи', 'что такое', 'как работает', 'означает'],
+            'code_request': ['код', 'пример', 'напиши', 'сгенерируй', 'покажи код'],
+            'comparison': ['разница', 'сравни', 'что лучше', 'отличие', 'отличия'],
+            'problem': ['проблема', 'ошибка', 'не работает', 'помоги решить', 'исправить'],
+            'opinion': ['мнение', 'думаешь', 'считаешь', 'точка зрения'],
+            'learning_path': ['с чего начать', 'как учить', 'путь обучения', 'изучение'],
+            'feedback': ['отлично', 'плохо', 'спасибо', 'неправильно', 'хорошо'],
+            'create_code': ['создай', 'придумай', 'новый класс', 'сгенерируй класс', 'напиши класс']
+        }
+    
+    def predict(self, text):
+        """Предсказание intent'а текста"""
+        text_lower = text.lower()
+        intents = []
+        
+        for intent, keywords in self.patterns.items():
+            if any(keyword in text_lower for keyword in keywords):
+                intents.append(intent)
+        
+        return intents if intents else ['unknown']
+
+class WebSearch:
+    """Класс для поиска информации в интернете"""
+    
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+    
+    def search_internet(self, query, max_results=2):
+        """Поиск информации в интернете по запросу"""
+        try:
+            # DuckDuckGo API
+            url = "https://api.duckduckgo.com/"
+            params = {
+                'q': query,
+                'format': 'json',
+                'no_html': '1',
+                'skip_disambig': '1'
+            }
             
-            "**При отладке кода:**\n• Используйте print() для отслеживания значений\n• Проверяйте типы данных переменных\n• Убедитесь в правильности условий\n• Тестируйте边界 случаи (edge cases)",
+            response = self.session.get(url, params=params, timeout=10)
+            data = response.json()
             
-            "**Распространенные причины ошибок:**\n• Опечатки в именах переменных\n• Неправильные отступы (в Python)\n• Несоответствие типов данных\n• Выход за границы массивов\n• Бесконечные циклы"
+            results = []
+            
+            # Основной ответ
+            if data.get('AbstractText'):
+                results.append({
+                    'title': data.get('Heading', 'Информация из интернета'),
+                    'snippet': data.get('AbstractText'),
+                    'source': 'DuckDuckGo',
+                    'url': data.get('AbstractURL', '')
+                })
+            
+            return results[:max_results]
+            
+        except Exception as e:
+            print(f"❌ Ошибка поиска: {e}")
+            return []
+
+class TextKnowledgeBase:
+    """Простая текстовая база знаний в JSON файле"""
+    
+    def __init__(self, filename="knowledge_base.json"):
+        self.filename = filename
+        self.knowledge = self._load_knowledge()
+    
+    def _load_knowledge(self):
+        """Загрузка базы знаний из файла"""
+        if os.path.exists(self.filename):
+            try:
+                with open(self.filename, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, Exception) as e:
+                print(f"⚠️ Ошибка загрузки базы знаний: {e}. Создаю новую.")
+                return self._create_default_structure()
+        else:
+            return self._create_default_structure()
+    
+    def _create_default_structure(self):
+        """Создание структуры базы знаний по умолчанию"""
+        return {
+            "version": "1.0",
+            "created_at": datetime.now().isoformat(),
+            "statistics": {
+                "total_entries": 0,
+                "categories": {},
+                "last_updated": datetime.now().isoformat()
+            },
+            "categories": {
+                "programming": [],
+                "algorithms": [],
+                "web": [],
+                "databases": [],
+                "concepts": [],
+                "code_examples": [],
+                "qa_pairs": []
+            }
+        }
+    
+    def save_knowledge(self):
+        """Сохранение базы знаний в файл"""
+        try:
+            # Обновляем статистику
+            self.knowledge["statistics"]["total_entries"] = sum(
+                len(entries) for entries in self.knowledge["categories"].values()
+            )
+            self.knowledge["statistics"]["last_updated"] = datetime.now().isoformat()
+            
+            # Сохраняем в файл
+            with open(self.filename, 'w', encoding='utf-8') as f:
+                json.dump(self.knowledge, f, ensure_ascii=False, indent=2)
+            
+            print(f"💾 База знаний сохранена: {self.filename}")
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка сохранения базы знаний: {e}")
+            return False
+    
+    def add_entry(self, category, question, answer, intent=None, tags=None, confidence=1.0):
+        """Добавление новой записи в базу знаний"""
+        entry = {
+            "id": self._generate_id(),
+            "question": question,
+            "answer": answer,
+            "intent": intent or "general",
+            "tags": tags or [],
+            "confidence": confidence,
+            "created_at": datetime.now().isoformat(),
+            "usage_count": 0,
+            "success_rate": 1.0
+        }
+        
+        # Добавляем в категорию
+        if category not in self.knowledge["categories"]:
+            self.knowledge["categories"][category] = []
+        
+        self.knowledge["categories"][category].append(entry)
+        
+        print(f"✅ Добавлена запись в категорию '{category}': {question[:50]}...")
+        self.save_knowledge()
+        return entry["id"]
+    
+    def _generate_id(self):
+        """Генерация уникального ID"""
+        return f"entry_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+    
+    def search(self, query, category=None, min_confidence=0.3, limit=5):
+        """Поиск в базе знаний"""
+        query_lower = query.lower()
+        results = []
+        
+        categories_to_search = [category] if category else self.knowledge["categories"].keys()
+        
+        for cat in categories_to_search:
+            for entry in self.knowledge["categories"].get(cat, []):
+                if entry["confidence"] >= min_confidence:
+                    score = self._calculate_similarity(query_lower, entry["question"].lower())
+                    if score > 0.3:  # Порог схожести
+                        entry['similarity_score'] = score
+                        entry['category'] = cat
+                        results.append(entry)
+        
+        # Сортировка по схожести и уверенности
+        results.sort(key=lambda x: (x['similarity_score'], x['confidence']), reverse=True)
+        return results[:limit]
+    
+    def _calculate_similarity(self, text1, text2):
+        """Вычисление схожести между двумя текстами"""
+        words1 = set(self._extract_keywords(text1))
+        words2 = set(self._extract_keywords(text2))
+        
+        if not words1 or not words2:
+            return 0.0
+        
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        
+        return len(intersection) / len(union)
+    
+    def _extract_keywords(self, text):
+        """Извлечение ключевых слов из текста"""
+        words = re.findall(r'\b[a-zа-я]{3,}\b', text.lower())
+        stop_words = {'это', 'как', 'что', 'для', 'или', 'если', 'так', 'но', 'на', 'в', 'с'}
+        return [word for word in words if word not in stop_words]
+    
+    def get_categories(self):
+        """Получение списка категорий"""
+        return list(self.knowledge["categories"].keys())
+    
+    def get_statistics(self):
+        """Получение статистики базы знаний"""
+        stats = self.knowledge["statistics"].copy()
+        stats["categories_breakdown"] = {
+            category: len(entries) 
+            for category, entries in self.knowledge["categories"].items()
+        }
+        return stats
+    
+    def update_entry_usage(self, entry_id, success=True):
+        """Обновление статистики использования записи"""
+        for category in self.knowledge["categories"].values():
+            for entry in category:
+                if entry["id"] == entry_id:
+                    entry["usage_count"] += 1
+                    if success:
+                        entry["success_rate"] = min(1.0, entry.get("success_rate", 1.0) + 0.1)
+                    else:
+                        entry["success_rate"] = max(0.0, entry.get("success_rate", 1.0) - 0.1)
+                    self.save_knowledge()
+                    return True
+        return False
+    
+    def export_to_file(self, export_filename=None):
+        """Экспорт базы знаний в читаемый текстовый файл"""
+        if not export_filename:
+            export_filename = f"knowledge_export_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
+        
+        try:
+            with open(export_filename, 'w', encoding='utf-8') as f:
+                f.write("=" * 60 + "\n")
+                f.write("📚 БАЗА ЗНАНИЙ AI ASSISTANT\n")
+                f.write("=" * 60 + "\n\n")
+                
+                # Статистика
+                stats = self.get_statistics()
+                f.write(f"📊 СТАТИСТИКА:\n")
+                f.write(f"• Всего записей: {stats['total_entries']}\n")
+                f.write(f"• Последнее обновление: {stats['last_updated']}\n\n")
+                
+                # Записи по категориям
+                for category, entries in self.knowledge["categories"].items():
+                    if entries:
+                        f.write(f"🎯 КАТЕГОРИЯ: {category.upper()}\n")
+                        f.write("-" * 40 + "\n")
+                        
+                        for i, entry in enumerate(entries, 1):
+                            f.write(f"{i}. ВОПРОС: {entry['question']}\n")
+                            f.write(f"   ОТВЕТ: {entry['answer'][:100]}{'...' if len(entry['answer']) > 100 else ''}\n")
+                            f.write(f"   (Использовано: {entry['usage_count']} раз, Успешность: {entry['success_rate']:.2f})\n\n")
+                
+                f.write("=" * 60 + "\n")
+                f.write("Конец экспорта\n")
+                f.write("=" * 60 + "\n")
+            
+            print(f"📤 База знаний экспортирована в: {export_filename}")
+            return export_filename
+        except Exception as e:
+            print(f"❌ Ошибка экспорта: {e}")
+            return None
+
+class EnhancedLearningAI:
+    """Улучшенная система обучения с текстовой базой знаний"""
+    
+    def __init__(self):
+        self.knowledge_base = TextKnowledgeBase()
+        self.classifier = SimpleClassifier()
+        self.web_search = WebSearch()
+        
+        # Инициализация начальными знаниями
+        self._initialize_with_basic_knowledge()
+    
+    def _initialize_with_basic_knowledge(self):
+        """Инициализация базовыми знаниями"""
+        basic_knowledge = [
+            # Программирование
+            ("programming", "что такое python", 
+             "Python - это язык программирования высокого уровня с простым и понятным синтаксисом. Используется для веб-разработки, анализа данных, искусственного интеллекта и автоматизации.", 
+             "explanation", ["python", "язык", "программирование"]),
+            
+            ("programming", "как создать класс в python", 
+             "Для создания класса в Python используйте ключевое слово class:\n\n```python\nclass MyClass:\n    def __init__(self, name):\n        self.name = name\n    \n    def greet(self):\n        print(f'Привет, {self.name}!')\n```", 
+             "code_request", ["python", "класс", "ооп"]),
+            
+            ("code_examples", "пример класса на python", 
+             "```python\nclass Car:\n    def __init__(self, brand, model, year):\n        self.brand = brand\n        self.model = model\n        self.year = year\n    \n    def display_info(self):\n        print(f'{self.brand} {self.model} ({self.year})')\n\n# Использование\nmy_car = Car('Toyota', 'Camry', 2022)\nmy_car.display_info()\n```", 
+             "code_example", ["python", "класс", "пример", "автомобиль"]),
+            
+            # Концепции
+            ("concepts", "что такое ооп", 
+             "ООП (Объектно-Ориентированное Программирование) - парадигма программирования, основанная на объектах. Основные принципы: инкапсуляция, наследование, полиморфизм.", 
+             "explanation", ["ооп", "объекты", "программирование", "парадигма"]),
+            
+            ("concepts", "что такое функция", 
+             "Функция - это блок кода, который выполняет определенную задачу и может быть повторно использован. Функции помогают организовать код и избежать дублирования.", 
+             "explanation", ["функция", "код", "программирование", "блок"]),
+            
+            ("concepts", "как работает цикл for", 
+             "Цикл for повторяет действия для каждого элемента в последовательности. В Python:\n\n```python\nfor item in [1, 2, 3, 4, 5]:\n    print(item)\n```", 
+             "explanation", ["цикл", "for", "python", "программирование"]),
+            
+            # Приветствия
+            ("qa_pairs", "привет", 
+             "Привет! Я AI-помощник. Чем могу помочь с программированием? 🤖", 
+             "greeting", ["приветствие"]),
+            
+            ("qa_pairs", "здравствуйте", 
+             "Здравствуйте! Готов ответить на ваши вопросы о программировании. 💻", 
+             "greeting", ["приветствие"]),
+            
+            ("qa_pairs", "пока", 
+             "До свидания! Возвращайтесь с вопросами по программированию! 👋", 
+             "farewell", ["прощание"]),
+            
+            ("qa_pairs", "до свидания", 
+             "До встречи! Удачи в изучении программирования! 🚀", 
+             "farewell", ["прощание"]),
+            
+            # Помощь
+            ("qa_pairs", "помощь", 
+             "Я могу:\n• Объяснять концепции программирования\n• Показывать примеры кода\n• Искать информацию в интернете\n• Генерировать простые классы\n\nПросто задайте вопрос! 💡", 
+             "help", ["помощь", "функции"]),
+            
+            ("qa_pairs", "что ты умеешь", 
+             "Мои возможности:\n🔍 Поиск в интернете\n💻 Генерация кода\n📚 Объяснение концепций\n🎯 Ответы на вопросы\n\nСпросите о Python, JavaScript, ООП и многом другом! 🌟", 
+             "help", ["умения", "функции"]),
         ]
         
-        return random.choice(advice) + "\n\nМожете описать вашу проблему подробнее?"
-
-    def _generate_smart_fallback(self, user_message, intent, entities):
-        """Умный fallback вместо простого 'не понял'"""
+        # Добавляем только если база пустая
+        if self.knowledge_base.get_statistics()["total_entries"] == 0:
+            print("📖 Инициализация базовыми знаниями...")
+            for category, question, answer, intent, tags in basic_knowledge:
+                self.knowledge_base.add_entry(category, question, answer, intent, tags)
+    
+    def find_best_response(self, user_message, intent, entities, use_web_search=True):
+        """Поиск лучшего ответа"""
+        # Сначала ищем в локальной базе знаний
+        search_results = self.knowledge_base.search(user_message, min_confidence=0.3)
         
-        # Анализируем запрос для более релевантного ответа
-        if len(user_message.split()) > 5:  # Длинный запрос - вероятно, сложный вопрос
-            responses = [
-                "Интересный вопрос! Я пока не сталкивался с таким, но обязательно изучу эту тему. 📚",
-                "Сложный вопрос! Я сохраню его для дальнейшего обучения. Можете переформулировать или задать более конкретный вопрос? 💭",
-                "Понял ваш запрос! К сожалению, у меня пока недостаточно информации по этой теме. Хотите, чтобы я поискал в интернете? 🔍"
-            ]
-        else:
-            responses = [
-                "Хм, не совсем понял вопрос. Можете переформулировать или задать более конкретно? 🤔",
-                "Интересно! Можете подробнее описать, что вас интересует? 💡",
-                "Я еще учусь отвечать на такие вопросы. Можете задать его по-другому? 🧠"
-            ]
+        if search_results:
+            best_match = search_results[0]
+            # Обновляем статистику использования
+            self.knowledge_base.update_entry_usage(best_match["id"], success=True)
+            
+            confidence = best_match.get("confidence", 1.0) * best_match.get("success_rate", 1.0)
+            return best_match["answer"], confidence, "knowledge_base"
         
-        # Добавляем предложение помощи
-        fallback = random.choice(responses)
-        return f"{fallback}\n\nПопробуйте задать вопрос о:\n• Концепциях программирования\n• Примеры кода\n• Решении конкретных проблем\n• Сравнении технологий"
-
-    def _generate_class_name(self, user_message):
-        """Генерация имени класса на основе запроса"""
-        # Извлекаем существительные из запроса для имени класса
-        words = [word for word in user_message.split() if len(word) > 3]
-        if words:
-            return words[0].capitalize()
-        return "MyClass"
+        # Если не нашли в базе, используем веб-поиск
+        if use_web_search and intent in ['explanation', 'code_request', 'learning_path']:
+            web_answer, web_source = self._web_search_and_save(user_message, intent, entities)
+            if web_answer:
+                return web_answer, 0.7, web_source
+        
+        return None, 0.0, None
     
     def _web_search_and_save(self, user_message, intent, entities):
         """Поиск в интернете и сохранение в базу знаний"""
@@ -161,11 +493,10 @@ class SmartAI:
         elif 'help' in intents:
             return "Я помогаю с программированием. Могу объяснить концепции, показать примеры кода или найти информацию в интернете. 💡"
         
-        # Более осмысленные ответы для неизвестных вопросов
         responses = [
-            "Интересный вопрос! Я изучаю новые темы и скоро смогу лучше отвечать на такие вопросы. 🚀",
-            "Сохранил ваш вопрос для обучения! А пока могу помочь с другими аспектами программирования. 💫",
-            "Отличный вопрос! Я еще расту и изучаю новые темы. Можете задать вопрос по-другому? 🌱"
+            "Интересный вопрос! Я сохраню его и изучу для будущих ответов. 📚",
+            "Пока не знаю точного ответа на этот вопрос, но я учусь! 🧠",
+            "Запомнил этот вопрос! В следующий раз смогу ответить лучше. 💫"
         ]
         return random.choice(responses)
     
@@ -617,11 +948,6 @@ def main():
     print("• 💻 Примеры кода на Python")
     print("• 🧠 Авто-обучение на взаимодействиях")
     print("• 📤 Экспорт знаний в текстовый файл")
-    print("\n🆕 УЛУЧШЕНИЯ:")
-    print("• 🤖 Умная обработка неизвестных вопросов")
-    print("• 💭 Генерация контекстных ответов")
-    print("• 🔧 Автоматическая генерация примеров кода")
-    print("• 🎯 Осмысленные ответы вместо 'не понял'")
     
     try:
         server = HTTPServer(('0.0.0.0', PORT), AIHandler)
