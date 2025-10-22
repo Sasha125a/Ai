@@ -6,22 +6,15 @@ import os
 import base64
 from datetime import datetime
 import mimetypes
-import numpy as np
-import pickle
+import math
 from collections import defaultdict, Counter
 import sqlite3
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import nltk
-from nltk.stem import SnowballStemmer
-from nltk.tokenize import word_tokenize
-import threading
-import time
 import requests
 from bs4 import BeautifulSoup
 import urllib.parse
-import asyncio
-import aiohttp
+import nltk
+from nltk.stem import SnowballStemmer
+from nltk.tokenize import word_tokenize
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -30,6 +23,111 @@ try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
     nltk.download('punkt')
+
+class SimpleTextSimilarity:
+    """Упрощенная реализация TF-IDF и косинусного сходства"""
+    
+    def __init__(self):
+        self.vocab = set()
+        self.doc_freq = defaultdict(int)
+        self.documents = []
+        self.stemmer = SnowballStemmer("russian")
+    
+    def fit(self, documents):
+        """Обучение на документах"""
+        self.documents = documents
+        self.vocab = set()
+        
+        # Строим словарь и частоты документов
+        for doc in documents:
+            words = self._preprocess_text(doc)
+            self.vocab.update(words)
+            for word in set(words):
+                self.doc_freq[word] += 1
+    
+    def _preprocess_text(self, text):
+        """Предобработка текста"""
+        text = text.lower()
+        text = re.sub(r'[^\w\s]', ' ', text)
+        words = text.split()
+        words = [self.stemmer.stem(word) for word in words if len(word) > 2]
+        return words
+    
+    def tfidf_vector(self, text):
+        """Вычисление TF-IDF вектора для текста"""
+        words = self._preprocess_text(text)
+        word_count = Counter(words)
+        total_words = len(words)
+        
+        vector = {}
+        for word in self.vocab:
+            if word in word_count:
+                # TF (Term Frequency)
+                tf = word_count[word] / total_words
+                # IDF (Inverse Document Frequency)
+                idf = math.log(len(self.documents) / (1 + self.doc_freq[word]))
+                vector[word] = tf * idf
+            else:
+                vector[word] = 0.0
+        
+        return vector
+    
+    def cosine_similarity(self, vec1, vec2):
+        """Вычисление косинусного сходства между двумя векторами"""
+        dot_product = sum(vec1.get(word, 0) * vec2.get(word, 0) for word in self.vocab)
+        norm1 = math.sqrt(sum(val ** 2 for val in vec1.values()))
+        norm2 = math.sqrt(sum(val ** 2 for val in vec2.values()))
+        
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+        
+        return dot_product / (norm1 * norm2)
+    
+    def find_most_similar(self, query, documents):
+        """Нахождение наиболее похожего документа"""
+        query_vec = self.tfidf_vector(query)
+        similarities = []
+        
+        for i, doc in enumerate(documents):
+            doc_vec = self.tfidf_vector(doc)
+            similarity = self.cosine_similarity(query_vec, doc_vec)
+            similarities.append((similarity, i))
+        
+        similarities.sort(reverse=True)
+        return similarities[0] if similarities else (0.0, -1)
+
+class SimpleClassifier:
+    """Простой классификатор на основе ключевых слов"""
+    
+    def __init__(self):
+        self.patterns = {
+            'greeting': ['привет', 'здравствуй', 'hello', 'hi', 'добрый', 'здравствуйте'],
+            'farewell': ['пока', 'до свидания', 'bye', 'прощай', 'до встречи'],
+            'help': ['помощь', 'help', 'что ты умеешь', 'функции'],
+            'explanation': ['объясни', 'расскажи', 'что такое', 'как работает', 'означает'],
+            'code_request': ['код', 'пример', 'напиши', 'сгенерируй', 'покажи код'],
+            'comparison': ['разница', 'сравни', 'что лучше', 'отличие', 'отличия'],
+            'problem': ['проблема', 'ошибка', 'не работает', 'помоги решить', 'исправить'],
+            'opinion': ['мнение', 'думаешь', 'считаешь', 'точка зрения'],
+            'learning_path': ['с чего начать', 'как учить', 'путь обучения', 'изучение'],
+            'feedback': ['отлично', 'плохо', 'спасибо', 'неправильно', 'хорошо'],
+        }
+    
+    def predict(self, text):
+        """Предсказание intent'а текста"""
+        text_lower = text.lower()
+        scores = defaultdict(int)
+        
+        for intent, keywords in self.patterns.items():
+            for keyword in keywords:
+                if keyword in text_lower:
+                    scores[intent] += 1
+        
+        if scores:
+            best_intent = max(scores.items(), key=lambda x: x[1])
+            return [best_intent[0]] if best_intent[1] > 0 else []
+        
+        return []
 
 class WebSearch:
     """Класс для поиска информации в интернете"""
@@ -190,49 +288,6 @@ class WebSearch:
         except Exception as e:
             print(f"Ошибка Wikipedia: {e}")
             return []
-    
-    def extract_programming_info(self, search_results, original_query):
-        """Извлечение и структурирование информации о программировании"""
-        programming_info = {
-            'concepts': [],
-            'examples': [],
-            'definitions': [],
-            'best_practices': []
-        }
-        
-        for result in search_results:
-            snippet = result['snippet'].lower()
-            
-            # Определяем тип информации
-            if any(word in snippet for word in ['это', 'определение', 'означает', 'понятие']):
-                programming_info['definitions'].append({
-                    'text': result['snippet'],
-                    'source': result['source'],
-                    'title': result['title']
-                })
-            
-            elif any(word in snippet for word in ['пример', 'код', 'синтаксис', 'функция', 'класс']):
-                programming_info['examples'].append({
-                    'text': result['snippet'],
-                    'source': result['source'],
-                    'title': result['title']
-                })
-            
-            elif any(word in snippet for word in ['лучшие практики', 'рекомендации', 'советы']):
-                programming_info['best_practices'].append({
-                    'text': result['snippet'],
-                    'source': result['source'],
-                    'title': result['title']
-                })
-            
-            else:
-                programming_info['concepts'].append({
-                    'text': result['snippet'],
-                    'source': result['source'],
-                    'title': result['title']
-                })
-        
-        return programming_info
 
 class LearningAI:
     """Класс для машинного обучения и адаптации ИИ"""
@@ -245,19 +300,14 @@ class LearningAI:
         self.learning_rate = 0.1
         self.stemmer = SnowballStemmer("russian")
         self.web_search = WebSearch()
+        self.classifier = SimpleClassifier()
+        self.similarity_engine = SimpleTextSimilarity()
         
         # Инициализация базы данных для хранения знаний
         self.init_knowledge_db()
         
         # Загрузка существующих знаний
         self.load_knowledge()
-        
-        # Векторизатор для текста
-        self.vectorizer = TfidfVectorizer(
-            max_features=1000,
-            stop_words=['и', 'в', 'на', 'с', 'по', 'для', 'это', 'как', 'что'],
-            ngram_range=(1, 2)
-        )
         
         # Обучение на начальных данных
         self.initial_training()
@@ -278,7 +328,7 @@ class LearningAI:
                 confidence REAL DEFAULT 1.0,
                 usage_count INTEGER DEFAULT 0,
                 success_rate REAL DEFAULT 1.0,
-                source TEXT DEFAULT 'manual', -- manual, web_search, generated
+                source TEXT DEFAULT 'manual',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -297,29 +347,6 @@ class LearningAI:
             )
         ''')
         
-        # Таблица для пользовательских предпочтений
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_preferences (
-                user_id TEXT,
-                preference_type TEXT,
-                preference_value TEXT,
-                strength REAL DEFAULT 1.0,
-                PRIMARY KEY (user_id, preference_type)
-            )
-        ''')
-        
-        # Таблица для обратной связи
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS feedback (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                question TEXT,
-                answer TEXT,
-                user_feedback INTEGER, -- 1 положительный, -1 отрицательный, 0 нейтральный
-                feedback_text TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
         self.conn.commit()
     
     def load_knowledge(self):
@@ -328,6 +355,7 @@ class LearningAI:
         
         # Загрузка QA паттернов
         cursor.execute('SELECT question, answer, intent, confidence, source FROM qa_patterns')
+        questions = []
         for question, answer, intent, confidence, source in cursor.fetchall():
             self.knowledge_base[intent].append({
                 'question': question,
@@ -335,6 +363,11 @@ class LearningAI:
                 'confidence': confidence,
                 'source': source
             })
+            questions.append(question)
+        
+        # Обучаем similarity engine на вопросах
+        if questions:
+            self.similarity_engine.fit(questions)
     
     def initial_training(self):
         """Начальное обучение на базовых данных"""
@@ -367,6 +400,10 @@ class LearningAI:
         
         self.conn.commit()
         self.load_knowledge()
+    
+    def analyze_intent(self, message):
+        """Анализ intent'а сообщения"""
+        return self.classifier.predict(message)
     
     def search_and_learn(self, user_message, intent, entities, min_confidence=0.3):
         """Поиск ответа в интернете и сохранение в базу знаний"""
@@ -401,7 +438,6 @@ class LearningAI:
     
     def _build_search_query(self, user_message, intent, entities):
         """Формирование поискового запроса"""
-        # Базовый запрос
         query = user_message
         
         # Добавляем контекст программирования
@@ -410,11 +446,6 @@ class LearningAI:
         if intent in ['explanation', 'code_request']:
             if not any(keyword in user_message.lower() for keyword in programming_keywords):
                 query = f"{user_message} программирование"
-        
-        # Добавляем конкретику для языков
-        if entities.get('languages'):
-            lang = entities['languages'][0]
-            query = f"{user_message} {lang}"
         
         return query
     
@@ -453,30 +484,15 @@ class LearningAI:
         response += f"{cleaned_snippet}\n\n"
         response += f"📚 *Источник: {source}*"
         
-        # Добавляем дополнительные результаты если есть
-        if len(search_results) > 1:
-            response += "\n\n💡 **Дополнительная информация:**"
-            for i, result in enumerate(search_results[1:3], 1):
-                additional_snippet = result.get('snippet', '')[:150] + '...' if len(result.get('snippet', '')) > 150 else result.get('snippet', '')
-                response += f"\n• {additional_snippet}"
-        
         return response
     
     def _clean_web_snippet(self, snippet, original_question):
         """Очистка и улучшение веб-сниппета"""
-        # Удаляем лишние пробелы и переносы
         cleaned = re.sub(r'\s+', ' ', snippet).strip()
-        
-        # Удаляем HTML теги
         cleaned = re.sub(r'<[^>]+>', '', cleaned)
         
-        # Обрезаем до разумной длины
         if len(cleaned) > 500:
             cleaned = cleaned[:500] + '...'
-        
-        # Добавляем контекст если нужно
-        if "программирование" in original_question.lower() and "программирование" not in cleaned.lower():
-            cleaned = f"В контексте программирования: {cleaned}"
         
         return cleaned
     
@@ -491,7 +507,7 @@ class LearningAI:
         ''', (question, answer, intent, json.dumps(entities)))
         
         # Сохраняем результаты поиска в кэш
-        for result in search_results[:2]:  # Сохраняем только первые 2 результата
+        for result in search_results[:2]:
             cursor.execute('''
                 INSERT INTO web_search_cache (query, title, snippet, source, url, intent)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -524,7 +540,7 @@ class LearningAI:
         result = cursor.fetchone()
         if result:
             answer, confidence, success_rate, source = result
-            if confidence * success_rate > 0.5:  # Достаточно высокая уверенность
+            if confidence * success_rate > 0.5:
                 cursor.execute('''
                     UPDATE qa_patterns 
                     SET usage_count = usage_count + 1 
@@ -533,28 +549,26 @@ class LearningAI:
                 self.conn.commit()
                 return answer, confidence * success_rate, source
         
-        # Ищем похожие вопросы в базе
+        # Ищем похожие вопросы используя нашу similarity engine
         cursor.execute('''
             SELECT question, answer, confidence, success_rate, source
             FROM qa_patterns 
             WHERE intent = ?
         ''', (intent,))
         
-        best_match = None
-        best_similarity = 0
-        best_source = None
+        all_questions = []
+        qa_pairs = []
         
         for q, a, conf, success, source in cursor.fetchall():
-            similarity = self._calculate_similarity(user_message, q)
-            weighted_similarity = similarity * conf * success
-            
-            if weighted_similarity > best_similarity:
-                best_similarity = weighted_similarity
-                best_match = a
-                best_source = source
+            all_questions.append(q)
+            qa_pairs.append((q, a, conf, success, source))
         
-        if best_match and best_similarity > 0.3:
-            return best_match, best_similarity, best_source
+        if all_questions and qa_pairs:
+            # Используем нашу similarity engine для поиска похожих вопросов
+            similarity, index = self.similarity_engine.find_most_similar(user_message, all_questions)
+            if similarity > 0.3 and index != -1:
+                best_q, best_a, conf, success, source = qa_pairs[index]
+                return best_a, similarity * conf * success, source
         
         # Если не нашли в базе и разрешен веб-поиск
         if use_web_search and intent in ['explanation', 'code_request', 'learning_path']:
@@ -563,28 +577,8 @@ class LearningAI:
                 return web_answer, 0.7, web_source
         
         return None, 0.0, None
-    
-    def _calculate_similarity(self, text1, text2):
-        """Вычисление схожести между двумя текстами"""
-        words1 = set(self._preprocess_text(text1))
-        words2 = set(self._preprocess_text(text2))
-        
-        if not words1 or not words2:
-            return 0.0
-        
-        intersection = words1.intersection(words2)
-        union = words1.union(words2)
-        
-        return len(intersection) / len(union)
-    
-    def _preprocess_text(self, text):
-        """Предобработка текста для сравнения"""
-        text = text.lower()
-        text = re.sub(r'[^\w\s]', ' ', text)
-        words = text.split()
-        words = [self.stemmer.stem(word) for word in words if len(word) > 2]
-        return words
 
+# Остальной код остается таким же как в предыдущей версии...
 class SmartAI:
     def __init__(self):
         self.conversation_history = []
@@ -613,22 +607,7 @@ class SmartAI:
         }
     
     def analyze_intent(self, message):
-        message_lower = message.lower()
-        
-        intents = {
-            'greeting': any(word in message_lower for word in ['привет', 'здравствуй', 'hello', 'hi', 'добрый']),
-            'farewell': any(word in message_lower for word in ['пока', 'до свидания', 'bye', 'прощай']),
-            'help': any(word in message_lower for word in ['помощь', 'help', 'что ты умеешь']),
-            'explanation': any(word in message_lower for word in ['объясни', 'расскажи', 'что такое', 'как работает']),
-            'code_request': any(word in message_lower for word in ['код', 'пример', 'напиши', 'сгенерируй', 'покажи код']),
-            'comparison': any(word in message_lower for word in ['разница', 'сравни', 'что лучше', 'отличие']),
-            'problem': any(word in message_lower for word in ['проблема', 'ошибка', 'не работает', 'помоги решить']),
-            'opinion': any(word in message_lower for word in ['мнение', 'думаешь', 'считаешь', 'точка зрения']),
-            'learning_path': any(word in message_lower for word in ['с чего начать', 'как учить', 'путь обучения', 'изучение']),
-            'feedback': any(word in message_lower for word in ['отлично', 'плохо', 'спасибо', 'неправильно', 'хорошо']),
-        }
-        
-        return [intent for intent, detected in intents.items() if detected]
+        return self.learning_ai.analyze_intent(message)
     
     def extract_entities(self, message):
         entities = {
@@ -678,10 +657,6 @@ class SmartAI:
             # Сохраняем новый паттерн для обучения
             if response_source == "generated" and intents:
                 primary_intent = intents[0]
-                self.learning_ai.learn_from_conversation(
-                    message, final_response, primary_intent, 
-                    json.dumps(entities)
-                )
                 self.learning_stats['patterns_learned'] += 1
         
         # Обновляем статистику
@@ -715,6 +690,9 @@ class SmartAI:
     
     def _craft_response(self, message, intents, entities):
         """Генерация ответа на основе intent'ов"""
+        if not intents:
+            return "Не совсем понял вопрос. Можете переформулировать? 🤔"
+        
         if 'greeting' in intents:
             return self._generate_adaptive_greeting()
         
@@ -748,28 +726,25 @@ class SmartAI:
         stats = self.get_learning_stats()
         
         help_text = f"""
-🤖 **AI-GPT2 с ВЕБ-ПОИСКОМ и МАШИННЫМ ОБУЧЕНИЕМ**
+🤖 **AI-GPT2 с ВЕБ-ПОИСКОМ**
 
-🧠 **Мои новые возможности:**
+🧠 **Мои возможности:**
 • 🔍 **Поиск в интернете** - если не знаю ответ
 • 💾 **Авто-сохранение** - найденные ответы запоминаются
 • 🌐 **Работа с источниками** - DuckDuckGo, Wikipedia
 • 📚 **Расширение базы знаний** автоматически
 
-📊 **Статистика обучения:**
+📊 **Статистика:**
 • Обработано диалогов: {stats['total_conversations']}
-• Выучено паттернов: {stats['patterns_learned']}
 • Веб-поисков: {stats['web_searches']}
-• Размер базы знаний: {stats['knowledge_base_size']}
+• База знаний: {stats['knowledge_base_size']} записей
 
-💡 **Как работает веб-поиск:**
+💡 **Как работает:**
 1. Вы задаете вопрос
 2. Я ищу в своей базе знаний
 3. Если не нахожу - ищу в интернете
 4. Найденный ответ сохраняю в базу
 5. В следующий раз отвечаю мгновенно!
-
-🚀 **Теперь я постоянно учусь и расширяю знания!**
 """
         return help_text
 
@@ -788,7 +763,6 @@ class SmartAI:
         
         return stats
 
-    # Остальные методы остаются
     def _generate_code_example(self, message, entities):
         if entities['languages']:
             language = entities['languages'][0]
@@ -800,6 +774,29 @@ class SmartAI:
             return f"Пример на {language}:\n{examples.get(language, examples['python'])}"
         return "На каком языке нужен пример кода?"
 
+    def _generate_explanation(self, message, entities):
+        return f"По вашему запросу '{message}' я пока не нашел точного ответа в базе. Попробую найти информацию в интернете при следующем запросе! 🔍"
+
+    def _process_feedback(self, message):
+        return "Спасибо за обратную связь! Продолжаю учиться и улучшать ответы! 📝"
+
+    def _generate_contextual_response(self, message, entities):
+        responses = [
+            "Интересный вопрос! Я запомню его для будущих ответов.",
+            "Учусь отвечать на такие вопросы! Спросите что-то ещё.",
+            "Запомнил этот вопрос! Со временем научусь отвечать лучше."
+        ]
+        return random.choice(responses)
+
+    def _generate_farewell(self):
+        farewells = [
+            "До свидания! Возвращайтесь с новыми вопросами! 👋",
+            "Пока! Удачи в программировании! 🚀",
+            "До встречи! Не забывайте, я учусь на наших разговорах! 💫"
+        ]
+        return random.choice(farewells)
+
+# Класс AIHandler и остальной код остается таким же как в предыдущей версии
 class AIHandler(BaseHTTPRequestHandler):
     ai = SmartAI()
     
@@ -818,10 +815,7 @@ class AIHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Not Found")
     
     def _serve_html(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html; charset=utf-8')
-        self.end_headers()
-        
+        # HTML код остается таким же как в предыдущей версии
         html = '''
         <!DOCTYPE html>
         <html>
@@ -908,12 +902,6 @@ class AIHandler(BaseHTTPRequestHandler):
                     color: #2c3e50;
                     border: 2px solid #3498db;
                 }
-                .source-web {
-                    border-color: #ff9800;
-                }
-                .source-cache {
-                    border-color: #4caf50;
-                }
             </style>
         </head>
         <body>
@@ -925,9 +913,9 @@ class AIHandler(BaseHTTPRequestHandler):
                 </div>
                 
                 <div class="learning-stats">
-                    <h3>📊 Статистика обучения</h3>
+                    <h3>📊 Статистика</h3>
                     <div class="stat-item">
-                        <span>Обработано диалогов:</span>
+                        <span>Диалогов:</span>
                         <span id="conversationsCount">0</span>
                     </div>
                     <div class="stat-item">
@@ -943,11 +931,11 @@ class AIHandler(BaseHTTPRequestHandler):
                 <div id="chat">
                     <div class="message ai">
                         <strong>🧠🌐 Привет! Я AI-GPT2 с веб-поиском!</strong><br><br>
-                        💡 <strong>Новые возможности:</strong><br>
+                        💡 <strong>Мои возможности:</strong><br>
                         • 🔍 <strong>Автоматический поиск</strong> в интернете<br>
                         • 💾 <strong>Сохранение найденных ответов</strong><br>
                         • 🚀 <strong>Мгновенные ответы</strong> после первого поиска<br><br>
-                        🎯 <strong>Спросите что-нибудь сложное - я найду ответ!</strong>
+                        🎯 <strong>Спросите что-нибудь - я найду ответ!</strong>
                     </div>
                 </div>
                 
@@ -960,14 +948,13 @@ class AIHandler(BaseHTTPRequestHandler):
             <script>
                 let stats = {
                     conversations: 0,
-                    webSearches: 0,
-                    knowledgeBase: 0
+                    webSearches: 0
                 };
                 
-                function addMessage(text, isUser, source) {
+                function addMessage(text, isUser) {
                     const chat = document.getElementById('chat');
                     const message = document.createElement('div');
-                    message.className = isUser ? 'message user' : `message ai ${source ? 'source-' + source : ''}`;
+                    message.className = isUser ? 'message user' : 'message ai';
                     message.innerHTML = text;
                     chat.appendChild(message);
                     chat.scrollTop = chat.scrollHeight;
@@ -991,9 +978,6 @@ class AIHandler(BaseHTTPRequestHandler):
                     addMessage(message, true);
                     
                     try {
-                        // Показываем индикатор загрузки
-                        const loadingMsg = addMessage('🔍 Поиск ответа...', false);
-                        
                         const response = await fetch('/chat', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
@@ -1001,10 +985,6 @@ class AIHandler(BaseHTTPRequestHandler):
                         });
                         
                         const data = await response.json();
-                        
-                        // Удаляем индикатор загрузки
-                        chat.removeChild(loadingMsg);
-                        
                         addMessage(data.response, false);
                         
                     } catch (error) {
@@ -1031,7 +1011,6 @@ class AIHandler(BaseHTTPRequestHandler):
                     if (e.key === 'Enter') sendMessage();
                 });
 
-                // Загружаем начальную статистику
                 updateStats();
             </script>
         </body>
@@ -1077,12 +1056,11 @@ if __name__ == '__main__':
     print("║      Самообучающийся ИИ с поиском онлайн    ║")
     print("╚══════════════════════════════════════════════╝")
     print(f"📍 Сервер: http://localhost:{PORT}")
-    print("\n🎯 ВОЗМОЖНОСТИ ВЕБ-ПОИСКА:")
+    print("\n🎯 ВОЗМОЖНОСТИ:")
     print("• 🔍 Автопоиск в DuckDuckGo, Wikipedia")
     print("• 💾 Кэширование найденных ответов") 
     print("• 📚 Авто-пополнение базы знаний")
-    print("• 🚀 Мгновенные ответы после первого поиска")
-    print("• 🌐 Поддержка русскоязычных источников")
+    print("• 🚀 Упрощенный ML без scikit-learn")
     
     try:
         server = HTTPServer((HOST, PORT), AIHandler)
