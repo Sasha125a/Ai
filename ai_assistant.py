@@ -358,24 +358,22 @@ class EnhancedLearningAI:
                 self.knowledge_base.add_entry(category, question, answer, intent, tags)
     
     def find_best_response(self, user_message, intent, entities, use_web_search=True):
-        """Поиск лучшего ответа"""
-        # Сначала ищем в локальной базе знаний
-        search_results = self.knowledge_base.search(user_message, min_confidence=0.3)
+        """Улучшенный поиск лучшего ответа"""
+        # Сначала ищем в локальной базе знаний с более низким порогом
+        search_results = self.knowledge_base.search(user_message, min_confidence=0.1)
         
-        if search_results:
+        if search_results and search_results[0].get('similarity_score', 0) > 0.5:
             best_match = search_results[0]
-            # Обновляем статистику использования
             self.knowledge_base.update_entry_usage(best_match["id"], success=True)
-            
             confidence = best_match.get("confidence", 1.0) * best_match.get("success_rate", 1.0)
             return best_match["answer"], confidence, "knowledge_base"
-        
-        # Если не нашли в базе, используем веб-поиск
-        if use_web_search and intent in ['explanation', 'code_request', 'learning_path']:
+    
+        # Пробуем веб-поиск для большего количества интентов
+        if use_web_search and intent in ['explanation', 'code_request', 'learning_path', 'comparison', 'problem']:
             web_answer, web_source = self._web_search_and_save(user_message, intent, entities)
             if web_answer:
                 return web_answer, 0.7, web_source
-        
+    
         return None, 0.0, None
     
     def _web_search_and_save(self, user_message, intent, entities):
@@ -425,6 +423,7 @@ class SmartAI:
             'conversations_processed': 0,
             'knowledge_base_entries': 0,
             'web_searches': 0,
+            'unanswered_questions': 0
         }
     
     def generate_smart_response(self, message):
@@ -444,6 +443,7 @@ class SmartAI:
         else:
             final_response = self._generate_fallback_response(message, intents, entities)
             source = "generated"
+            self.learning_stats['unanswered_questions'] += 1
         
         # Обновляем статистику
         self.learning_stats['conversations_processed'] += 1
@@ -473,19 +473,12 @@ class SmartAI:
         
         final_response += f"\n\n{source_info.get(source, '')}"
         
-        return final_response
-    
-    def extract_entities(self, message):
-        """Простое извлечение сущностей"""
-        entities = {'languages': []}
-        languages = ['python', 'javascript', 'java', 'html', 'css']
-        for lang in languages:
-            if lang in message.lower():
-                entities['languages'].append(lang)
-        return entities
-    
+        return final_response    
+        
     def _generate_fallback_response(self, message, intents, entities):
-        """Генерация ответа, когда не нашли в базе"""
+        """Улучшенная генерация ответа, когда не нашли в базе"""
+        
+        # Обработка стандартных интентов
         if 'greeting' in intents:
             return "Привет! Чем могу помочь с программированием? 🤖"
         elif 'farewell' in intents:
@@ -493,24 +486,270 @@ class SmartAI:
         elif 'help' in intents:
             return "Я помогаю с программированием. Могу объяснить концепции, показать примеры кода или найти информацию в интернете. 💡"
         
-        responses = [
-            "Интересный вопрос! Я сохраню его и изучу для будущих ответов. 📚",
-            "Пока не знаю точного ответа на этот вопрос, но я учусь! 🧠",
-            "Запомнил этот вопрос! В следующий раз смогу ответить лучше. 💫"
-        ]
+        # Анализ содержания вопроса
+        message_lower = message.lower()
+        
+        # Определение тематики вопроса
+        programming_keywords = ['python', 'javascript', 'java', 'программир', 'код', 'функция', 'класс', 'объект', 'алгоритм']
+        explanation_keywords = ['что такое', 'как работает', 'объясни', 'расскажи', 'означает']
+        code_keywords = ['пример', 'код', 'напиши', 'сгенерируй', 'покажи код', 'создай']
+        comparison_keywords = ['разница', 'сравни', 'лучше', 'отличие', 'отличия']
+        problem_keywords = ['проблема', 'ошибка', 'не работает', 'помоги', 'исправить']
+        learning_keywords = ['с чего начать', 'как учить', 'путь обучения', 'изучение']
+        
+        # Анализ типа вопроса
+        is_programming_question = any(keyword in message_lower for keyword in programming_keywords)
+        is_explanation_request = any(keyword in message_lower for keyword in explanation_keywords)
+        is_code_request = any(keyword in message_lower for keyword in code_keywords)
+        is_comparison = any(keyword in message_lower for keyword in comparison_keywords)
+        is_problem = any(keyword in message_lower for keyword in problem_keywords)
+        is_learning_path = any(keyword in message_lower for keyword in learning_keywords)
+        
+        # Генерация контекстного ответа
+        if is_programming_question:
+            if is_explanation_request:
+                # Запрос на объяснение концепции
+                concept = self._extract_concept(message)
+                if concept:
+                    return f"💡 **Вопрос про '{concept}'**\n\nПока не могу дать подробное объяснение, но я уже изучаю эту тему! 📚\n\nПопробуйте задать вопрос более конкретно или поищите в документации."
+                else:
+                    return "🤔 **Вопрос по программированию**\n\nИнтересный вопрос! Я сохраню его для изучения. Можете уточнить, что именно вас интересует?"
+            
+            elif is_code_request:
+                # Запрос примера кода
+                language = self._extract_language(message)
+                topic = self._extract_code_topic(message)
+                if language and topic:
+                    return f"💻 **Запрос кода на {language}**\n\nТема '{topic}' интересная! Пока нет готового примера, но я работаю над этим.\n\nСоветую посмотреть примеры в официальной документации {language}."
+                elif language:
+                    return f"🚀 **Код на {language}**\n\nЗапомнил ваш запрос! В следующий раз смогу предложить конкретный пример кода."
+                else:
+                    return "📝 **Запрос примера кода**\n\nХороший вопрос! Я добавлю его в учебную базу и в будущем смогу дать развернутый ответ с кодом."
+            
+            elif is_comparison:
+                # Сравнительный вопрос
+                subjects = self._extract_comparison_subjects(message)
+                if subjects:
+                    return f"⚖️ **Сравнение: {subjects}**\n\nИнтересное сравнение! Изучу этот вопрос и в следующий раз дам детальный анализ. 📊"
+                else:
+                    return "🔍 **Вопрос на сравнение**\n\nОтличный вопрос для анализа! Я сохраню его и подготовлю развернутый ответ."
+            
+            elif is_problem:
+                # Проблема/ошибка
+                return "🐛 **Проблема с кодом**\n\nПонимаю, что столкнулись с трудностью! Пока не могу предложить конкретное решение, но изучаю подобные случаи.\n\nОпишите проблему более детально: код, ошибка, что ожидали получить."
+            
+            elif is_learning_path:
+                # Путь обучения
+                subject = self._extract_learning_subject(message)
+                if subject:
+                    return f"🎯 **Изучение {subject}**\n\nОтличный выбор для обучения! Собираю информацию по эффективным методам изучения {subject}. Скоро смогу предложить roadmap!"
+                else:
+                    return "📚 **Путь обучения**\n\nВопрос про обучение программированию! Сохраняю его для подготовки качественного руководства."
+        
+        # Общий интеллектуальный ответ для программирования
+        if is_programming_question:
+            responses = [
+                "🧠 **Программирование**\n\nИнтересный технический вопрос! Анализирую его и добавляю в учебную базу. В следующий раз отвечу более развернуто!",
+                "🚀 **Разработка**\n\nПонял ваш вопрос! Сейчас изучаю эту тему, чтобы в будущем давать точные ответы. Продолжайте задавать вопросы!",
+                "💡 **IT-вопрос**\n\nСпасибо за вопрос! Я уже работаю над расширением знаний в этой области. Скоро смогу помогать лучше!",
+                "📖 **Обучение**\n\nЗапомнил этот вопрос! Ваши вопросы помогают мне становиться умнее. Возвращайтесь за ответом позже!"
+            ]
+        else:
+            # Ответы для непрограммистских вопросов
+            responses = [
+                "🤔 **Новый вопрос**\n\nИнтересно! Пока я специализируюсь на программировании, но изучаю и другие темы. Запомнил ваш вопрос!",
+                "🌐 **Расширение знаний**\n\nСпасибо за вопрос! Я в основном помогаю с программированием, но постоянно учусь новому.",
+                "🎓 **Обучение**\n\nЗаписал ваш вопрос! Хотя моя основная специализация - программирование, я стараюсь развиваться в разных направлениях."
+            ]
+        
+        # Добавляем вопрос в базу знаний для будущего изучения
+        self._add_question_to_learning_queue(message, intents)
+        
         return random.choice(responses)
+    
+    def _extract_concept(self, message):
+        """Извлечение концепции из вопроса"""
+        concepts = ['ооп', 'функция', 'класс', 'объект', 'наследование', 'инкапсуляция', 
+                   'полиморфизм', 'алгоритм', 'структура данных', 'база данных', 'api',
+                   'фреймворк', 'библиотека', 'переменная', 'цикл', 'условие', 'массив',
+                   'список', 'словарь', 'декоратор', 'генератор', 'итератор', 'модуль',
+                   'пакет', 'исключение', 'рекурсия', 'хэш', 'дерево', 'граф', 'стек',
+                   'очередь', 'сортировка', 'поиск', 'компилятор', 'интерпретатор']
+        
+        message_lower = message.lower()
+        for concept in concepts:
+            if concept in message_lower:
+                return concept
+        
+        # Попытка извлечь концепцию после "что такое"
+        if 'что такое' in message_lower:
+            start_idx = message_lower.find('что такое') + 9
+            concept = message_lower[start_idx:].split('?')[0].split(' ')[0].strip()
+            if concept and len(concept) > 2:
+                return concept
+        
+        # Попытка извлечь концепцию после "объясни"
+        if 'объясни' in message_lower:
+            start_idx = message_lower.find('объясни') + 7
+            concept = message_lower[start_idx:].split('?')[0].split(' ')[0].strip()
+            if concept and len(concept) > 2:
+                return concept
+        
+        return None
+    
+    def _extract_language(self, message):
+        """Извлечение языка программирования"""
+        languages = {
+            'python': ['python', 'пайтон'],
+            'javascript': ['javascript', 'js', 'джаваскрипт'],
+            'java': ['java', 'джава'],
+            'html': ['html', 'хтмл'],
+            'css': ['css', 'цсс'],
+            'sql': ['sql', 'ес кью эл'],
+            'c++': ['c++', 'с++', 'си++'],
+            'c#': ['c#', 'c sharp', 'си шарп'],
+            'php': ['php', 'пхп'],
+            'ruby': ['ruby', 'руби'],
+            'go': ['go', 'golang', 'го']
+        }
+        
+        message_lower = message.lower()
+        for lang, keywords in languages.items():
+            if any(keyword in message_lower for keyword in keywords):
+                return lang
+        
+        return None
+    
+    def _extract_code_topic(self, message):
+        """Извлечение темы для кода"""
+        topics = {
+            'класс': ['класс', 'class'],
+            'функция': ['функция', 'function'],
+            'цикл': ['цикл', 'loop', 'for', 'while'],
+            'условие': ['условие', 'if', 'else', 'switch'],
+            'массив': ['массив', 'array', 'список', 'list'],
+            'словарь': ['словарь', 'dictionary', 'dict'],
+            'ооп': ['ооп', 'объект', 'object'],
+            'алгоритм': ['алгоритм', 'algorithm'],
+            'сортировка': ['сортировка', 'sort'],
+            'поиск': ['поиск', 'search']
+        }
+        
+        message_lower = message.lower()
+        for topic, keywords in topics.items():
+            if any(keyword in message_lower for keyword in keywords):
+                return topic
+        
+        return None
+    
+    def _extract_comparison_subjects(self, message):
+        """Извлечение субъектов сравнения"""
+        comparison_words = ['разница между', 'сравни', ' vs ', ' versus ', 'отличие между']
+        message_lower = message.lower()
+        
+        for word in comparison_words:
+            if word in message_lower:
+                # Упрощенное извлечение субъектов
+                parts = message_lower.split(word)
+                if len(parts) > 1:
+                    subjects = parts[1].split(' и ')[0].split(' или ')[0].split('?')[0].strip()
+                    if subjects and len(subjects) > 3:
+                        return subjects
+        
+        return None
+    
+    def _extract_learning_subject(self, message):
+        """Извлечение предмета обучения"""
+        subjects = {
+            'python': ['python', 'пайтон'],
+            'javascript': ['javascript', 'js'],
+            'web': ['веб', 'web', 'frontend', 'backend'],
+            'базы данных': ['баз данных', 'database', 'sql'],
+            'алгоритмы': ['алгоритм', 'algorithm'],
+            'ооп': ['ооп', 'объект'],
+            'машинное обучение': ['машинн', 'ai', 'ии', 'ml']
+        }
+        
+        message_lower = message.lower()
+        for subject, keywords in subjects.items():
+            if any(keyword in message_lower for keyword in keywords):
+                return subject
+        
+        return None
+    
+    def _add_question_to_learning_queue(self, question, intents):
+        """Добавление вопроса в очередь на изучение"""
+        try:
+            # Создаем файл для непонятых вопросов
+            unanswered_file = "unanswered_questions.json"
+            questions_data = []
+            
+            if os.path.exists(unanswered_file):
+                with open(unanswered_file, 'r', encoding='utf-8') as f:
+                    questions_data = json.load(f)
+            
+            new_question = {
+                "question": question,
+                "intents": intents,
+                "timestamp": datetime.now().isoformat(),
+                "processed": False
+            }
+            
+            questions_data.append(new_question)
+            
+            with open(unanswered_file, 'w', encoding='utf-8') as f:
+                json.dump(questions_data, f, ensure_ascii=False, indent=2)
+                
+            print(f"📥 Сохранен вопрос для изучения: {question[:50]}...")
+            
+        except Exception as e:
+            print(f"⚠️ Ошибка сохранения непонятого вопроса: {e}")
+    
+    def extract_entities(self, message):
+        """Простое извлечение сущностей"""
+        entities = {
+            'languages': [],
+            'concepts': [],
+            'frameworks': []
+        }
+        
+        # Языки программирования
+        languages = ['python', 'javascript', 'java', 'html', 'css', 'sql', 'c++', 'c#', 'php', 'ruby', 'go']
+        for lang in languages:
+            if lang in message.lower():
+                entities['languages'].append(lang)
+        
+        # Концепции
+        concepts = ['ооп', 'функция', 'класс', 'объект', 'наследование', 'алгоритм', 'база данных']
+        for concept in concepts:
+            if concept in message.lower():
+                entities['concepts'].append(concept)
+        
+        return entities
     
     def get_learning_stats(self):
         """Получение статистики"""
-        return {
+        stats = {
             'total_conversations': self.learning_stats['conversations_processed'],
             'knowledge_base_entries': self.learning_stats['knowledge_base_entries'],
             'web_searches': self.learning_stats['web_searches'],
+            'unanswered_questions': self.learning_stats['unanswered_questions'],
+            'conversation_history_length': len(self.conversation_history)
         }
+        return stats
     
     def export_knowledge_base(self):
         """Экспорт базы знаний"""
         return self.learning_ai.export_knowledge()
+    
+    def get_conversation_history(self, limit=10):
+        """Получение истории разговоров"""
+        return self.conversation_history[-limit:] if self.conversation_history else []
+    
+    def clear_conversation_history(self):
+        """Очистка истории разговоров"""
+        self.conversation_history.clear()
+        return "История разговоров очищена"
 
 class AIHandler(BaseHTTPRequestHandler):
     ai = SmartAI()
