@@ -53,18 +53,66 @@ class SimpleClassifier:
         return intents if intents else ['unknown']
 
 class WebSearch:
-    """Класс для поиска информации в интернете"""
-    
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
     
-    def search_internet(self, query, max_results=2):
-        """Поиск информации в интернете по запросу"""
+    def search_internet(self, query, max_results=3):
+        """Универсальный поиск с несколькими источниками"""
         try:
-            # DuckDuckGo API
+            # Пробуем разные методы поиска
+            results = []
+            
+            # 1. DuckDuckGo
+            ddg_results = self._duckduckgo_search(query, max_results)
+            results.extend(ddg_results)
+            
+            # 2. Если результатов мало, пробуем другие методы
+            if len(results) < max_results:
+                bing_results = self._bing_search(query, max_results - len(results))
+                results.extend(bing_results)
+            
+            return results[:max_results]
+            
+        except Exception as e:
+            print(f"❌ Ошибка поиска: {e}")
+            return []
+    
+    def _bing_search(self, query, max_results):
+        """Поиск через Bing (более надежный чем DuckDuckGo)"""
+        try:
+            url = "https://www.bing.com/search"
+            params = {'q': query}
+            
+            response = self.session.get(url, params=params, timeout=10)
+            
+            # Простой парсинг результатов Bing
+            results = []
+            pattern = r'<li class="b_algo">.*?<h2>.*?<a href="([^"]+)".*?>(.*?)</a>.*?<div class="b_caption">.*?<p>(.*?)</p>'
+            matches = re.findall(pattern, response.text, re.DOTALL)
+            
+            for url, title, snippet in matches[:max_results]:
+                # Очистка HTML тегов
+                title = re.sub(r'<.*?>', '', title)
+                snippet = re.sub(r'<.*?>', '', snippet)
+                
+                results.append({
+                    'title': title[:100],
+                    'snippet': snippet[:200],
+                    'source': 'Bing',
+                    'url': url
+                })
+            
+            return results
+        except Exception as e:
+            print(f"❌ Ошибка Bing поиска: {e}")
+            return []
+    
+    def _duckduckgo_search(self, query, max_results):
+        """Поиск через DuckDuckGo"""
+        try:
             url = "https://api.duckduckgo.com/"
             params = {
                 'q': query,
@@ -77,8 +125,6 @@ class WebSearch:
             data = response.json()
             
             results = []
-            
-            # Основной ответ
             if data.get('AbstractText'):
                 results.append({
                     'title': data.get('Heading', 'Информация из интернета'),
@@ -87,10 +133,9 @@ class WebSearch:
                     'url': data.get('AbstractURL', '')
                 })
             
-            return results[:max_results]
-            
+            return results
         except Exception as e:
-            print(f"❌ Ошибка поиска: {e}")
+            print(f"❌ Ошибка DuckDuckGo: {e}")
             return []
 
 class TextKnowledgeBase:
