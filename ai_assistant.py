@@ -935,7 +935,7 @@ class SmartAI:
     def __init__(self):
         self.conversation_history = []
         self.learning_ai = EnhancedLearningAI()
-        self.zip_analyzer = ZipAnalyzer()  # Добавляем анализатор ZIP
+        self.zip_analyzer = ZipAnalyzer()
         self.learning_stats = {
             'conversations_processed': 0,
             'knowledge_base_entries': 0,
@@ -945,34 +945,100 @@ class SmartAI:
         }
     
     def generate_smart_response(self, message):
-        # Проверяем запросы на анализ ZIP-файлов
+        """Основной метод генерации ответов - исправленная версия"""
+        # Всегда сначала проверяем базовые интенты
         message_lower = message.lower()
         
-        if any(word in message_lower for word in ['zip', 'архив', 'структур', 'папк', 'файл']):
-            return self._handle_zip_analysis_request(message)
+        if any(word in message_lower for word in ['привет', 'здравствуй', 'hello', 'hi']):
+            return "Привет! 🖐️ Я AI-помощник с доступом к интернете. Задавайте любой вопрос - найду актуальную информацию! 🌐"
         
-        # Остальная логика остается прежней...
-        # [остальной код без изменений]
+        if any(word in message_lower for word in ['пока', 'до свидания', 'bye']):
+            return "До свидания! Возвращайтесь с новыми вопросами! 👋"
+        
+        if any(word in message_lower for word in ['помощь', 'help', 'что ты умеешь']):
+            return self._get_help_response()
+        
+        # Проверяем запросы на анализ ZIP-файлов (только если явно упоминаются)
+        if any(word in message_lower for word in ['zip', 'архив', 'структур', 'распакуй', 'проанализируй архив']):
+            zip_response = self._handle_zip_analysis_request(message)
+            if zip_response:
+                return zip_response
+        
+        # ИСПРАВЛЕНИЕ: Используем обычный поиск для всех остальных запросов
+        print(f"🔍 Обрабатываю запрос: {message}")
+        
+        intents = self.learning_ai.classifier.predict(message)
+        entities = self.extract_entities(message)
+        primary_intent = intents[0] if intents else "unknown"
+        
+        # Всегда пытаемся найти ответ через EnhancedLearningAI
+        response, confidence, source = self.learning_ai.find_best_response(
+            message, primary_intent, entities, use_web_search=True
+        )
+        
+        # Обновляем статистику
+        self.learning_stats['conversations_processed'] += 1
+        self.learning_stats['knowledge_base_entries'] = (
+            self.learning_ai.get_knowledge_stats()["total_entries"]
+        )
+        
+        if source == "web_search":
+            self.learning_stats['web_searches'] += 1
+            self.learning_stats['successful_searches'] += 1
+            print(f"✅ Найден ответ через веб-поиск: {message[:30]}...")
+        else:
+            print(f"💡 Ответ из базы знаний: {message[:30]}...")
+        
+        # Сохраняем в историю
+        self.conversation_history.append({
+            'message': message,
+            'response': response,
+            'source': source,
+            'confidence': confidence,
+            'timestamp': datetime.now()
+        })
+        
+        # Ограничиваем историю
+        if len(self.conversation_history) > 50:
+            self.conversation_history = self.conversation_history[-20:]
+        
+        return response
+    
+    def _get_help_response(self):
+        """Возвращает сообщение помощи"""
+        return """🦾 **Мои возможности:**
+
+• 🔍 **Поиск в интернете** - отвечаю на любые вопросы
+• 💻 **Программирование** - код, алгоритмы, технологии  
+• 📚 **Объяснения** - сложные концепции простыми словами
+• 🎯 **Факты** - актуальная информация из сети
+• 📦 **Анализ ZIP-архивов** - структура и содержимое файлов
+
+**Как использовать:**
+• Просто задайте вопрос - я найду ответ в интернете!
+• Для анализа архивов: прикрепите ZIP-файл и напишите "проанализируй этот архив"
+• Можно одновременно отправлять файлы и текстовые запросы
+
+Просто спросите о чем угодно! 💫"""
     
     def _handle_zip_analysis_request(self, message):
         """Обрабатывает запросы на анализ ZIP-файлов"""
-        # Показываем инструкцию по загрузке
-        response = """📦 **Анализ ZIP-архивов**
+        # Только информационное сообщение, если файл не прикреплен
+        return """📦 **Анализ ZIP-архивов**
 
 Я могу проанализировать ZIP-файл и показать:
 • 📁 Полную структуру папок и файлов
-• 📊 Статистику по типам файлов
+• 📊 Статистику по типам файлов  
 • 🔍 Содержимое текстовых файлов
 • 💻 Анализ кода (Python, JS, Java и др.)
 
 **Как использовать:**
-1. Загрузите ZIP-файл через специальную форму
-2. Я автоматически его распаковываю и анализирую
-3. Покажу подробную структуру и содержимое
+1. Нажмите на скрепку 📎 рядом с полем ввода
+2. Выберите ZIP-файл для загрузки
+3. Напишите запрос (например, "проанализируй этот архив")
+4. Нажмите "Отправить"
 
-Для загрузки файла используйте endpoint: `/upload-zip`"""
-        
-        return response
+Я автоматически распаковываю архив и показываю подробный анализ!"""
     
     def analyze_uploaded_zip(self, zip_file_path):
         """Анализирует загруженный ZIP-файл"""
@@ -1035,12 +1101,12 @@ class SmartAI:
             
             if content['readme_files']:
                 report.append("\n📖 **README файлы:**")
-                for file in content['readme_files'][:3]:  # Показываем первые 3
+                for file in content['readme_files'][:3]:
                     report.append(f"  • {file}")
             
             if content['code_files']:
                 report.append("\n💻 **Файлы с кодом:**")
-                for file in content['code_files'][:5]:  # Показываем первые 5
+                for file in content['code_files'][:5]:
                     report.append(f"  • {file}")
                 
                 # Показываем содержимое первого Python файла если есть
@@ -1072,6 +1138,38 @@ class SmartAI:
                 return f"{size_bytes:.1f} {unit}"
             size_bytes /= 1024.0
         return f"{size_bytes:.1f} TB"
+    
+    def extract_entities(self, message):
+        """Простое извлечение сущностей"""
+        return {'languages': [], 'concepts': []}
+    
+    def get_learning_stats(self):
+        """Получение статистики"""
+        total_searches = max(1, self.learning_stats['web_searches'])
+        success_rate = (self.learning_stats['successful_searches'] / total_searches) * 100
+        
+        return {
+            'total_conversations': self.learning_stats['conversations_processed'],
+            'knowledge_base_entries': self.learning_stats['knowledge_base_entries'],
+            'web_searches': self.learning_stats['web_searches'],
+            'successful_searches': self.learning_stats['successful_searches'],
+            'success_rate': round(success_rate, 1),
+            'conversation_history_length': len(self.conversation_history),
+            'zip_files_analyzed': self.learning_stats['zip_files_analyzed']
+        }
+    
+    def export_knowledge_base(self):
+        """Экспорт базы знаний"""
+        return self.learning_ai.export_knowledge()
+    
+    def get_conversation_history(self, limit=10):
+        """Получение истории разговоров"""
+        return self.conversation_history[-limit:] if self.conversation_history else []
+    
+    def clear_conversation_history(self):
+        """Очистка истории разговоров"""
+        self.conversation_history.clear()
+        return "История разговоров очищена"
 
 class AIHandler(BaseHTTPRequestHandler):
     ai = SmartAI()
