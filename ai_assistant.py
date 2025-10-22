@@ -970,224 +970,348 @@ class AIHandler(BaseHTTPRequestHandler):
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>AI-GPT2 с Веб-Поиском 🧠🌐</title>
+            <title>AI Assistant</title>
             <style>
-                body { 
-                    font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
-                    max-width: 800px; 
-                    margin: 0 auto; 
-                    padding: 20px; 
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    min-height: 100vh;
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
                 }
+                
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    height: 100vh;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                }
+                
                 .chat-container {
+                    width: 100%;
+                    max-width: 800px;
+                    height: 90vh;
                     background: white;
                     border-radius: 20px;
-                    padding: 25px;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                    height: 90vh;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
                     display: flex;
                     flex-direction: column;
+                    overflow: hidden;
                 }
-                .header {
-                    text-align: center;
-                    margin-bottom: 20px;
+                
+                .chat-header {
                     background: linear-gradient(135deg, #2c3e50, #3498db);
                     color: white;
                     padding: 20px;
-                    border-radius: 15px;
-                    margin: -25px -25px 20px -25px;
+                    text-align: center;
                 }
-                .learning-stats {
-                    background: #e8f4fd;
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin: 10px 0;
-                    border-left: 4px solid #3498db;
+                
+                .chat-header h1 {
+                    font-size: 1.5em;
+                    margin-bottom: 5px;
                 }
-                .stat-item {
-                    display: flex;
-                    justify-content: space-between;
-                    margin: 5px 0;
+                
+                .chat-header p {
+                    opacity: 0.9;
+                    font-size: 0.9em;
                 }
-                .web-search-indicator {
-                    background: #ffeb3b;
-                    padding: 5px 10px;
-                    border-radius: 15px;
-                    font-size: 0.8em;
-                    margin-left: 10px;
-                }
-                #chat {
+                
+                .chat-messages {
                     flex: 1;
-                    border: 2px solid #e1e5e9;
-                    border-radius: 15px;
                     padding: 20px;
-                    margin-bottom: 20px;
                     overflow-y: auto;
                     background: #f8f9fa;
                 }
+                
                 .message {
-                    margin: 15px 0;
-                    padding: 15px 20px;
+                    margin: 10px 0;
+                    padding: 12px 16px;
                     border-radius: 18px;
-                    max-width: 85%;
-                    line-height: 1.5;
+                    max-width: 80%;
+                    line-height: 1.4;
+                    animation: fadeIn 0.3s ease;
                 }
-                .user {
+                
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                
+                .user-message {
                     background: linear-gradient(135deg, #007bff, #0056b3);
                     color: white;
                     margin-left: auto;
+                    border-bottom-right-radius: 5px;
+                }
+                
+                .ai-message {
+                    background: white;
+                    color: #333;
+                    border: 2px solid #e9ecef;
+                    border-bottom-left-radius: 5px;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                }
+                
+                .message-time {
+                    font-size: 0.7em;
+                    opacity: 0.7;
+                    margin-top: 5px;
                     text-align: right;
                 }
-                .ai {
+                
+                .chat-input-container {
+                    padding: 20px;
                     background: white;
-                    color: #2c3e50;
-                    border: 2px solid #3498db;
+                    border-top: 1px solid #e9ecef;
+                    display: flex;
+                    gap: 10px;
                 }
+                
+                .chat-input {
+                    flex: 1;
+                    padding: 12px 16px;
+                    border: 2px solid #e9ecef;
+                    border-radius: 25px;
+                    font-size: 14px;
+                    outline: none;
+                    transition: border-color 0.3s;
+                }
+                
+                .chat-input:focus {
+                    border-color: #3498db;
+                }
+                
+                .send-button {
+                    padding: 12px 24px;
+                    background: linear-gradient(135deg, #e74c3c, #c0392b);
+                    color: white;
+                    border: none;
+                    border-radius: 25px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    font-weight: 600;
+                    transition: transform 0.2s;
+                }
+                
+                .send-button:hover {
+                    transform: translateY(-1px);
+                }
+                
+                .send-button:active {
+                    transform: translateY(0);
+                }
+                
+                .typing-indicator {
+                    display: none;
+                    padding: 12px 16px;
+                    background: white;
+                    border: 2px solid #e9ecef;
+                    border-radius: 18px;
+                    border-bottom-left-radius: 5px;
+                    max-width: 80px;
+                    margin: 10px 0;
+                }
+                
+                .typing-dots {
+                    display: flex;
+                    gap: 4px;
+                }
+                
+                .typing-dot {
+                    width: 8px;
+                    height: 8px;
+                    background: #999;
+                    border-radius: 50%;
+                    animation: typing 1.4s infinite;
+                }
+                
+                .typing-dot:nth-child(2) {
+                    animation-delay: 0.2s;
+                }
+                
+                .typing-dot:nth-child(3) {
+                    animation-delay: 0.4s;
+                }
+                
+                @keyframes typing {
+                    0%, 60%, 100% {
+                        transform: translateY(0);
+                        opacity: 0.4;
+                    }
+                    30% {
+                        transform: translateY(-5px);
+                        opacity: 1;
+                    }
+                }
+                
                 .code-block {
                     background: #2c3e50;
                     color: #ecf0f1;
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin: 10px 0;
-                    font-family: 'Courier New', monospace;
-                    white-space: pre-wrap;
-                    overflow-x: auto;
-                }
-                .prompt-examples {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 10px;
-                    margin: 10px 0;
-                }
-                .prompt-example {
-                    background: #e8f4fd;
-                    padding: 10px;
+                    padding: 12px;
                     border-radius: 8px;
-                    font-size: 0.8em;
-                    cursor: pointer;
-                    border: 1px solid #3498db;
+                    margin: 8px 0;
+                    font-family: 'Courier New', monospace;
+                    font-size: 0.9em;
+                    overflow-x: auto;
+                    border-left: 4px solid #e74c3c;
                 }
-                .prompt-example:hover {
-                    background: #d1ecf1;
+                
+                /* Scrollbar styling */
+                .chat-messages::-webkit-scrollbar {
+                    width: 6px;
+                }
+                
+                .chat-messages::-webkit-scrollbar-track {
+                    background: #f1f1f1;
+                    border-radius: 3px;
+                }
+                
+                .chat-messages::-webkit-scrollbar-thumb {
+                    background: #c1c1c1;
+                    border-radius: 3px;
+                }
+                
+                .chat-messages::-webkit-scrollbar-thumb:hover {
+                    background: #a8a8a8;
+                }
+                
+                /* Mobile responsiveness */
+                @media (max-width: 768px) {
+                    .chat-container {
+                        height: 100vh;
+                        border-radius: 0;
+                    }
+                    
+                    .message {
+                        max-width: 90%;
+                    }
+                    
+                    .chat-header {
+                        padding: 15px;
+                    }
+                    
+                    .chat-header h1 {
+                        font-size: 1.3em;
+                    }
                 }
             </style>
         </head>
         <body>
             <div class="chat-container">
-                <div class="header">
-                    <h1>🧠🌐 AI-GPT2 с Веб-Поиском</h1>
-                    <p>ИИ который ищет ответы в интернете и генерирует код!</p>
-                    <div class="web-search-indicator">🔍 АКТИВЕН ВЕБ-ПОИСК</div>
+                <div class="chat-header">
+                    <h1>🧠 AI Assistant</h1>
+                    <p>Задайте вопрос о программировании</p>
                 </div>
                 
-                <div class="prompt-examples">
-                    <div class="prompt-example" onclick="insertPrompt(this)">"Создай класс Car с brand, model, year"</div>
-                    <div class="prompt-example" onclick="insertPrompt(this)">"Что такое ООП в программировании?"</div>
-                    <div class="prompt-example" onclick="insertPrompt(this)">"Покажи пример кода на Python"</div>
-                    <div class="prompt-example" onclick="insertPrompt(this)">"Как работает цикл for?"</div>
-                </div>
-                
-                <div class="learning-stats">
-                    <h3>📊 Статистика</h3>
-                    <div class="stat-item">
-                        <span>Диалогов:</span>
-                        <span id="conversationsCount">0</span>
-                    </div>
-                    <div class="stat-item">
-                        <span>Веб-поисков:</span>
-                        <span id="webSearches">0</span>
-                    </div>
-                    <div class="stat-item">
-                        <span>База знаний:</span>
-                        <span id="knowledgeBase">0 записей</span>
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message ai-message">
+                        <strong>Привет! Я ваш AI-помощник 🤖</strong><br><br>
+                        Я могу:<br>
+                        • 🔍 Искать информацию в интернете<br>
+                        • 💻 Генерировать код на Python/JavaScript/Java<br>
+                        • 📚 Объяснять концепции программирования<br><br>
+                        Просто задайте вопрос!
                     </div>
                 </div>
                 
-                <div id="chat">
-                    <div class="message ai">
-                        <strong>🧠🌐 Привет! Я AI-GPT2 с веб-поиском и генерацией кода!</strong><br><br>
-                        💡 <strong>Мои возможности:</strong><br>
-                        • 🔍 <strong>Автоматический поиск</strong> в интернете<br>
-                        • 💻 <strong>Генерация кода</strong> на Python/JavaScript/Java<br>
-                        • 💾 <strong>Сохранение найденных ответов</strong><br>
-                        • 🚀 <strong>Мгновенные ответы</strong> после первого поиска<br><br>
-                        🎯 <strong>Пример: "Создай класс User с именем и email"</strong>
+                <div class="typing-indicator" id="typingIndicator">
+                    <div class="typing-dots">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
                     </div>
                 </div>
                 
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="messageInput" placeholder="Спросите о программировании или создайте код..." style="flex: 1; padding: 15px; border: 2px solid #bdc3c7; border-radius: 25px;">
-                    <button onclick="sendMessage()" style="padding: 15px 25px; background: #e74c3c; color: white; border: none; border-radius: 25px;">Отправить</button>
+                <div class="chat-input-container">
+                    <input type="text" class="chat-input" id="messageInput" placeholder="Введите ваше сообщение..." autocomplete="off">
+                    <button class="send-button" onclick="sendMessage()">Отправить</button>
                 </div>
             </div>
 
             <script>
-                function insertPrompt(element) {
-                    document.getElementById('messageInput').value = element.textContent;
-                    document.getElementById('messageInput').focus();
-                }
-
+                const chatMessages = document.getElementById('chatMessages');
+                const messageInput = document.getElementById('messageInput');
+                const typingIndicator = document.getElementById('typingIndicator');
+                
                 function addMessage(text, isUser) {
-                    const chat = document.getElementById('chat');
-                    const message = document.createElement('div');
-                    message.className = isUser ? 'message user' : 'message ai';
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = isUser ? 'message user-message' : 'message ai-message';
                     
+                    // Format text with code blocks
                     let formattedText = text;
-                    // Обработка блоков кода
                     if (text.includes('```')) {
                         formattedText = text.replace(/```(\\w+)?\\n([\\s\\S]*?)```/g, '<div class="code-block">$2</div>');
                     }
                     formattedText = formattedText.replace(/\\n/g, '<br>');
                     
-                    message.innerHTML = formattedText;
-                    chat.appendChild(message);
-                    chat.scrollTop = chat.scrollHeight;
-                }
-
-                async function sendMessage() {
-                    const input = document.getElementById('messageInput');
-                    const message = input.value.trim();
+                    const time = new Date().toLocaleTimeString('ru-RU', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
                     
+                    messageDiv.innerHTML = `${formattedText}<div class="message-time">${time}</div>`;
+                    chatMessages.appendChild(messageDiv);
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+                
+                function showTyping() {
+                    typingIndicator.style.display = 'block';
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+                
+                function hideTyping() {
+                    typingIndicator.style.display = 'none';
+                }
+                
+                async function sendMessage() {
+                    const message = messageInput.value.trim();
                     if (!message) return;
                     
-                    input.value = '';
+                    // Clear input
+                    messageInput.value = '';
+                    
+                    // Add user message
                     addMessage(message, true);
+                    
+                    // Show typing indicator
+                    showTyping();
                     
                     try {
                         const response = await fetch('/chat', {
                             method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({message: message})
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ message: message })
                         });
                         
                         const data = await response.json();
+                        
+                        // Hide typing indicator
+                        hideTyping();
+                        
+                        // Add AI response
                         addMessage(data.response, false);
                         
                     } catch (error) {
-                        addMessage('❌ Ошибка соединения', false);
+                        hideTyping();
+                        addMessage('❌ Ошибка соединения с сервером', false);
+                        console.error('Error:', error);
                     }
                 }
-
-                async function updateStats() {
-                    try {
-                        const response = await fetch('/stats');
-                        const data = await response.json();
-                        
-                        document.getElementById('conversationsCount').textContent = data.total_conversations;
-                        document.getElementById('webSearches').textContent = data.web_searches;
-                        document.getElementById('knowledgeBase').textContent = data.knowledge_base_size + ' записей';
-                    } catch (error) {
-                        console.log('Ошибка загрузки статистики');
+                
+                // Send message on Enter key
+                messageInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        sendMessage();
                     }
-                }
-
-                document.getElementById('messageInput').addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') sendMessage();
                 });
-
-                // Загружаем начальную статистику
-                updateStats();
+                
+                // Focus input on load
+                messageInput.focus();
+                
+                // Auto-scroll to bottom on load
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             </script>
         </body>
         </html>
@@ -1224,7 +1348,7 @@ class AIHandler(BaseHTTPRequestHandler):
             self.send_error(500, f"Error: {str(e)}")
     
     def log_message(self, format, *args):
-        print(f"AI-GPT2: {format % args}")
+        print(f"AI Assistant: {format % args}")
 
 def main():
     PORT = int(os.environ.get('PORT', 8000))
