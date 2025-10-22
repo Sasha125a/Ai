@@ -55,185 +55,6 @@ class SimpleClassifier:
         
         return intents if intents else ['unknown']
 
-class ZipAnalyzer:
-    """Класс для анализа ZIP-архивов"""
-    
-    def __init__(self):
-        self.temp_dir = None
-    
-    def analyze_zip(self, zip_file_path):
-        """Анализирует ZIP-архив и возвращает структуру"""
-        try:
-            if not os.path.exists(zip_file_path):
-                return {"error": "Файл не найден"}
-            
-            # Создаем временную директорию для распаковки
-            self.temp_dir = tempfile.mkdtemp()
-            
-            structure = {
-                "filename": os.path.basename(zip_file_path),
-                "total_size": os.path.getsize(zip_file_path),
-                "file_count": 0,
-                "folder_count": 0,
-                "structure": [],
-                "file_types": {},
-                "created_at": datetime.now().isoformat()
-            }
-            
-            with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
-                # Получаем список всех файлов
-                file_list = zip_ref.namelist()
-                structure["file_count"] = len(file_list)
-                
-                # Анализируем структуру
-                structure["structure"] = self._build_tree_structure(file_list)
-                structure["folder_count"] = self._count_folders(file_list)
-                structure["file_types"] = self._analyze_file_types(file_list)
-                
-                # Распаковываем для детального анализа
-                zip_ref.extractall(self.temp_dir)
-                
-                # Добавляем информацию о содержимом файлов
-                structure["content_analysis"] = self._analyze_contents(self.temp_dir)
-            
-            return structure
-            
-        except zipfile.BadZipFile:
-            return {"error": "Некорректный ZIP-файл"}
-        except Exception as e:
-            return {"error": f"Ошибка анализа: {str(e)}"}
-    
-    def _build_tree_structure(self, file_list):
-        """Строит древовидную структуру файлов"""
-        root = {}
-        
-        for file_path in file_list:
-            # Пропускаем служебные файлы macOS
-            if '__MACOSX' in file_path or '.DS_Store' in file_path:
-                continue
-                
-            parts = file_path.split('/')
-            current = root
-            
-            for i, part in enumerate(parts):
-                if not part:  # Пустые части (например, от завершающего /)
-                    continue
-                    
-                if i == len(parts) - 1:
-                    # Это файл
-                    current[part] = {"type": "file", "path": file_path}
-                else:
-                    # Это папка
-                    if part not in current:
-                        current[part] = {"type": "folder", "children": {}}
-                    current = current[part]["children"]
-        
-        return self._format_tree(root)
-    
-    def _format_tree(self, node, level=0):
-        """Форматирует дерево в читаемый вид"""
-        result = []
-        indent = "  " * level
-        
-        for name, info in sorted(node.items()):
-            if info["type"] == "folder":
-                result.append(f"{indent}📁 {name}/")
-                result.extend(self._format_tree(info["children"], level + 1))
-            else:
-                result.append(f"{indent}📄 {name}")
-        
-        return result
-    
-    def _count_folders(self, file_list):
-        """Считает количество уникальных папок"""
-        folders = set()
-        for file_path in file_list:
-            dir_path = os.path.dirname(file_path)
-            if dir_path:  # Не корневая директория
-                folders.add(dir_path)
-        return len(folders)
-    
-    def _analyze_file_types(self, file_list):
-        """Анализирует типы файлов в архиве"""
-        file_types = {}
-        for file_path in file_list:
-            if not file_path.endswith('/'):  # Это не папка
-                ext = os.path.splitext(file_path)[1].lower()
-                if not ext:
-                    ext = "без расширения"
-                file_types[ext] = file_types.get(ext, 0) + 1
-        return dict(sorted(file_types.items(), key=lambda x: x[1], reverse=True))
-    
-    def _analyze_contents(self, extract_path):
-        """Анализирует содержимое файлов"""
-        analysis = {
-            "readme_files": [],
-            "code_files": [],
-            "config_files": [],
-            "image_files": [],
-            "document_files": []
-        }
-        
-        code_extensions = {'.py', '.js', '.java', '.cpp', '.c', '.html', '.css', '.php', '.rb', '.go', '.rs'}
-        config_extensions = {'.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.toml'}
-        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp'}
-        document_extensions = {'.txt', '.md', '.pdf', '.doc', '.docx', '.rtf'}
-        
-        for root_dir, dirs, files in os.walk(extract_path):
-            for file in files:
-                file_path = os.path.join(root_dir, file)
-                rel_path = os.path.relpath(file_path, extract_path)
-                ext = os.path.splitext(file)[1].lower()
-                
-                # Пропускаем системные файлы
-                if file.startswith('.') or '__MACOSX' in rel_path:
-                    continue
-                
-                # Классифицируем файлы
-                if file.lower() in ['readme', 'readme.txt', 'readme.md', 'readme.rst']:
-                    analysis["readme_files"].append(rel_path)
-                elif ext in code_extensions:
-                    analysis["code_files"].append(rel_path)
-                elif ext in config_extensions:
-                    analysis["config_files"].append(rel_path)
-                elif ext in image_extensions:
-                    analysis["image_files"].append(rel_path)
-                elif ext in document_extensions:
-                    analysis["document_files"].append(rel_path)
-        
-        return analysis
-    
-    def read_file_content(self, file_path, max_lines=50):
-        """Читает содержимое файла с ограничением по количеству строк"""
-        try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = []
-                for i, line in enumerate(f):
-                    if i >= max_lines:
-                        lines.append("... (файл слишком большой, показаны первые 50 строк)")
-                        break
-                    lines.append(line.rstrip())
-                return lines
-        except:
-            try:
-                with open(file_path, 'r', encoding='cp1251', errors='ignore') as f:
-                    lines = []
-                    for i, line in enumerate(f):
-                        if i >= max_lines:
-                            lines.append("... (файл слишком большой, показаны первые 50 строк)")
-                            break
-                        lines.append(line.rstrip())
-                    return lines
-            except:
-                return ["[Не удалось прочитать файл - бинарный файл или неизвестная кодировка]"]
-    
-    def cleanup(self):
-        """Очищает временные файлы"""
-        if self.temp_dir and os.path.exists(self.temp_dir):
-            import shutil
-            shutil.rmtree(self.temp_dir)
-            self.temp_dir = None
-
 class AdvancedWebSearch:
     def __init__(self):
         self.session = requests.Session()
@@ -772,6 +593,185 @@ class TextKnowledgeBase:
             print(f"❌ Ошибка экспорта: {e}")
             return None
 
+class ZipAnalyzer:
+    """Класс для анализа ZIP-архивов"""
+    
+    def __init__(self):
+        self.temp_dir = None
+    
+    def analyze_zip(self, zip_file_path):
+        """Анализирует ZIP-архив и возвращает структуру"""
+        try:
+            if not os.path.exists(zip_file_path):
+                return {"error": "Файл не найден"}
+            
+            # Создаем временную директорию для распаковки
+            self.temp_dir = tempfile.mkdtemp()
+            
+            structure = {
+                "filename": os.path.basename(zip_file_path),
+                "total_size": os.path.getsize(zip_file_path),
+                "file_count": 0,
+                "folder_count": 0,
+                "structure": [],
+                "file_types": {},
+                "created_at": datetime.now().isoformat()
+            }
+            
+            with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                # Получаем список всех файлов
+                file_list = zip_ref.namelist()
+                structure["file_count"] = len(file_list)
+                
+                # Анализируем структуру
+                structure["structure"] = self._build_tree_structure(file_list)
+                structure["folder_count"] = self._count_folders(file_list)
+                structure["file_types"] = self._analyze_file_types(file_list)
+                
+                # Распаковываем для детального анализа
+                zip_ref.extractall(self.temp_dir)
+                
+                # Добавляем информацию о содержимом файлов
+                structure["content_analysis"] = self._analyze_contents(self.temp_dir)
+            
+            return structure
+            
+        except zipfile.BadZipFile:
+            return {"error": "Некорректный ZIP-файл"}
+        except Exception as e:
+            return {"error": f"Ошибка анализа: {str(e)}"}
+    
+    def _build_tree_structure(self, file_list):
+        """Строит древовидную структуру файлов"""
+        root = {}
+        
+        for file_path in file_list:
+            # Пропускаем служебные файлы macOS
+            if '__MACOSX' in file_path or '.DS_Store' in file_path:
+                continue
+                
+            parts = file_path.split('/')
+            current = root
+            
+            for i, part in enumerate(parts):
+                if not part:  # Пустые части (например, от завершающего /)
+                    continue
+                    
+                if i == len(parts) - 1:
+                    # Это файл
+                    current[part] = {"type": "file", "path": file_path}
+                else:
+                    # Это папка
+                    if part not in current:
+                        current[part] = {"type": "folder", "children": {}}
+                    current = current[part]["children"]
+        
+        return self._format_tree(root)
+    
+    def _format_tree(self, node, level=0):
+        """Форматирует дерево в читаемый вид"""
+        result = []
+        indent = "  " * level
+        
+        for name, info in sorted(node.items()):
+            if info["type"] == "folder":
+                result.append(f"{indent}📁 {name}/")
+                result.extend(self._format_tree(info["children"], level + 1))
+            else:
+                result.append(f"{indent}📄 {name}")
+        
+        return result
+    
+    def _count_folders(self, file_list):
+        """Считает количество уникальных папок"""
+        folders = set()
+        for file_path in file_list:
+            dir_path = os.path.dirname(file_path)
+            if dir_path:  # Не корневая директория
+                folders.add(dir_path)
+        return len(folders)
+    
+    def _analyze_file_types(self, file_list):
+        """Анализирует типы файлов в архиве"""
+        file_types = {}
+        for file_path in file_list:
+            if not file_path.endswith('/'):  # Это не папка
+                ext = os.path.splitext(file_path)[1].lower()
+                if not ext:
+                    ext = "без расширения"
+                file_types[ext] = file_types.get(ext, 0) + 1
+        return dict(sorted(file_types.items(), key=lambda x: x[1], reverse=True))
+    
+    def _analyze_contents(self, extract_path):
+        """Анализирует содержимое файлов"""
+        analysis = {
+            "readme_files": [],
+            "code_files": [],
+            "config_files": [],
+            "image_files": [],
+            "document_files": []
+        }
+        
+        code_extensions = {'.py', '.js', '.java', '.cpp', '.c', '.html', '.css', '.php', '.rb', '.go', '.rs'}
+        config_extensions = {'.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.toml'}
+        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp'}
+        document_extensions = {'.txt', '.md', '.pdf', '.doc', '.docx', '.rtf'}
+        
+        for root_dir, dirs, files in os.walk(extract_path):
+            for file in files:
+                file_path = os.path.join(root_dir, file)
+                rel_path = os.path.relpath(file_path, extract_path)
+                ext = os.path.splitext(file)[1].lower()
+                
+                # Пропускаем системные файлы
+                if file.startswith('.') or '__MACOSX' in rel_path:
+                    continue
+                
+                # Классифицируем файлы
+                if file.lower() in ['readme', 'readme.txt', 'readme.md', 'readme.rst']:
+                    analysis["readme_files"].append(rel_path)
+                elif ext in code_extensions:
+                    analysis["code_files"].append(rel_path)
+                elif ext in config_extensions:
+                    analysis["config_files"].append(rel_path)
+                elif ext in image_extensions:
+                    analysis["image_files"].append(rel_path)
+                elif ext in document_extensions:
+                    analysis["document_files"].append(rel_path)
+        
+        return analysis
+    
+    def read_file_content(self, file_path, max_lines=50):
+        """Читает содержимое файла с ограничением по количеству строк"""
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                lines = []
+                for i, line in enumerate(f):
+                    if i >= max_lines:
+                        lines.append("... (файл слишком большой, показаны первые 50 строк)")
+                        break
+                    lines.append(line.rstrip())
+                return lines
+        except:
+            try:
+                with open(file_path, 'r', encoding='cp1251', errors='ignore') as f:
+                    lines = []
+                    for i, line in enumerate(f):
+                        if i >= max_lines:
+                            lines.append("... (файл слишком большой, показаны первые 50 строк)")
+                            break
+                        lines.append(line.rstrip())
+                    return lines
+            except:
+                return ["[Не удалось прочитать файл - бинарный файл или неизвестная кодировка]"]
+    
+    def cleanup(self):
+        """Очищает временные файлы"""
+        if self.temp_dir and os.path.exists(self.temp_dir):
+            import shutil
+            shutil.rmtree(self.temp_dir)
+            self.temp_dir = None
+
 class EnhancedLearningAI:
     """Улучшенная система обучения с веб-поиском как основным источником"""
     
@@ -1085,10 +1085,10 @@ class AIHandler(BaseHTTPRequestHandler):
             self._serve_history()
         elif self.path == '/export':
             self._export_knowledge()
-        elif self.path == '/upload-zip':
+        elif self.path == '/upload':
             self._serve_upload_form()
-        elif self.path == '/zip-analysis':
-            self._serve_zip_analysis_info()
+        elif self.path.startswith('/download/'):
+            self._serve_file_download()
         else:
             self.send_error(404, "Not Found")
     
@@ -1097,8 +1097,10 @@ class AIHandler(BaseHTTPRequestHandler):
             self._handle_chat()
         elif self.path == '/clear-history':
             self._clear_history()
-        elif self.path == '/upload-zip':
-            self._handle_zip_upload()
+        elif self.path == '/upload-file':
+            self._handle_file_upload()
+        elif self.path == '/analyze-with-file':
+            self._handle_analysis_with_file()
         else:
             self.send_error(404, "Not Found")
     
@@ -1229,25 +1231,91 @@ class AIHandler(BaseHTTPRequestHandler):
                 }
                 
                 .chat-input-container {
-                    padding: 20px;
+                    padding: 15px 20px;
                     background: white;
                     border-top: 1px solid #e9ecef;
                     display: flex;
                     gap: 10px;
+                    align-items: flex-end;
+                }
+                
+                .input-wrapper {
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
                 }
                 
                 .chat-input {
-                    flex: 1;
+                    width: 100%;
                     padding: 12px 16px;
                     border: 2px solid #e9ecef;
                     border-radius: 25px;
                     font-size: 14px;
                     outline: none;
                     transition: border-color 0.3s;
+                    resize: none;
+                    min-height: 44px;
+                    max-height: 120px;
+                    font-family: inherit;
                 }
                 
                 .chat-input:focus {
                     border-color: #3498db;
+                }
+                
+                .attached-files {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    margin-top: 5px;
+                }
+                
+                .file-tag {
+                    background: #e3f2fd;
+                    border: 1px solid #bbdefb;
+                    border-radius: 15px;
+                    padding: 4px 12px;
+                    font-size: 0.8em;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                
+                .file-tag .remove-file {
+                    background: none;
+                    border: none;
+                    color: #f44336;
+                    cursor: pointer;
+                    font-size: 1.1em;
+                    padding: 0;
+                    width: 16px;
+                    height: 16px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                
+                .file-actions {
+                    display: flex;
+                    gap: 8px;
+                    align-items: center;
+                }
+                
+                .attach-button {
+                    background: none;
+                    border: none;
+                    font-size: 1.5em;
+                    cursor: pointer;
+                    padding: 8px;
+                    border-radius: 50%;
+                    transition: background 0.3s;
+                    color: #666;
+                }
+                
+                .attach-button:hover {
+                    background: #f5f5f5;
+                    color: #333;
                 }
                 
                 .send-button {
@@ -1260,6 +1328,7 @@ class AIHandler(BaseHTTPRequestHandler):
                     font-size: 14px;
                     font-weight: 600;
                     transition: transform 0.2s;
+                    min-width: 80px;
                 }
                 
                 .send-button:hover {
@@ -1268,6 +1337,16 @@ class AIHandler(BaseHTTPRequestHandler):
                 
                 .send-button:active {
                     transform: translateY(0);
+                }
+                
+                .send-button:disabled {
+                    background: #bdc3c7;
+                    cursor: not-allowed;
+                    transform: none;
+                }
+                
+                .file-input {
+                    display: none;
                 }
                 
                 .typing-indicator {
@@ -1331,32 +1410,39 @@ class AIHandler(BaseHTTPRequestHandler):
                     100% { opacity: 0.7; }
                 }
                 
-                .typing-message {
-                    background: white;
-                    color: #333;
-                    border: 2px solid #e9ecef;
-                    border-bottom-left-radius: 5px;
+                .file-message {
+                    background: linear-gradient(135deg, #00b894, #00a085);
+                    color: white;
+                    padding: 15px;
+                    border-radius: 18px;
                     margin: 10px 0;
                     max-width: 80%;
-                    padding: 12px 16px;
-                    border-radius: 18px;
+                    margin-left: auto;
+                    border-bottom-right-radius: 5px;
                 }
                 
-                .message-final {
-                    background: white;
-                    color: #333;
-                    border: 2px solid #e9ecef;
-                    border-bottom-left-radius: 5px;
-                    margin: 10px 0;
-                    max-width: 80%;
-                    padding: 12px 16px;
-                    border-radius: 18px;
-                    animation: slideIn 0.3s ease;
+                .file-info {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
                 }
                 
-                @keyframes slideIn {
-                    from { opacity: 0; transform: translateY(10px); }
-                    to { opacity: 1; transform: translateY(0); }
+                .file-icon {
+                    font-size: 1.5em;
+                }
+                
+                .file-details {
+                    flex: 1;
+                }
+                
+                .file-name {
+                    font-weight: bold;
+                    margin-bottom: 4px;
+                }
+                
+                .file-size {
+                    font-size: 0.8em;
+                    opacity: 0.9;
                 }
                 
                 .code-block {
@@ -1371,11 +1457,11 @@ class AIHandler(BaseHTTPRequestHandler):
                     border-left: 4px solid #e74c3c;
                 }
                 
-                .zip-info {
-                    background: linear-gradient(135deg, #00b894, #00a085);
+                .zip-analysis {
+                    background: linear-gradient(135deg, #fd79a8, #e84393);
                     color: white;
                     padding: 15px;
-                    border-radius: 10px;
+                    border-radius: 18px;
                     margin: 10px 0;
                     max-width: 90%;
                 }
@@ -1424,6 +1510,10 @@ class AIHandler(BaseHTTPRequestHandler):
                         justify-content: center;
                         margin-top: 10px;
                     }
+                    
+                    .chat-input-container {
+                        padding: 10px 15px;
+                    }
                 }
             </style>
         </head>
@@ -1431,21 +1521,21 @@ class AIHandler(BaseHTTPRequestHandler):
             <div class="chat-container">
                 <div class="chat-header">
                     <h1>🧠 AI Assistant</h1>
-                    <p>Задайте вопрос - найду ответ в интернете!</p>
+                    <p>Задайте вопрос или загрузите файл для анализа</p>
                     <div class="header-buttons">
-                        <a href="/upload-zip" class="header-btn">📦 Анализ ZIP</a>
                         <a href="/stats" class="header-btn">📊 Статистика</a>
                     </div>
                 </div>
                 
                 <div class="chat-messages" id="chatMessages">
                     <div class="message ai-message">
-                        <strong>Привет! Я ваш AI-помощник с доступом к интернете 🌐</strong><br><br>
-                        Просто задайте любой вопрос, и я найду актуальную информацию!<br>
-                        • 🔍 Поиск в реальном времени<br>
-                        • 💻 Ответы на любые темы<br>
-                        • 📦 Анализ ZIP-архивов<br>
-                        • 🚀 Быстрые результаты
+                        <strong>Привет! Я ваш AI-помощник 🤖</strong><br><br>
+                        Я могу:<br>
+                        • 🔍 Искать информацию в интернете<br>
+                        • 📦 Анализировать ZIP-архивы<br>
+                        • 📄 Читать текстовые файлы<br>
+                        • 💻 Анализировать код<br><br>
+                        <strong>Просто напишите сообщение или прикрепите файл!</strong>
                     </div>
                 </div>
                 
@@ -1458,18 +1548,73 @@ class AIHandler(BaseHTTPRequestHandler):
                 </div>
                 
                 <div class="chat-input-container">
-                    <input type="text" class="chat-input" id="messageInput" placeholder="Введите ваш вопрос..." autocomplete="off">
-                    <button class="send-button" onclick="sendMessage()">Отправить</button>
+                    <div class="file-actions">
+                        <input type="file" id="fileInput" class="file-input" multiple accept=".zip,.txt,.py,.js,.java,.html,.css,.json,.md">
+                        <button class="attach-button" onclick="document.getElementById('fileInput').click()" title="Прикрепить файл">
+                            📎
+                        </button>
+                    </div>
+                    
+                    <div class="input-wrapper">
+                        <textarea class="chat-input" id="messageInput" placeholder="Введите ваш вопрос..." autocomplete="off" rows="1"></textarea>
+                        <div class="attached-files" id="attachedFiles"></div>
+                    </div>
+                    
+                    <button class="send-button" onclick="sendMessage()" id="sendButton">Отправить</button>
                 </div>
             </div>
 
             <script>
                 const chatMessages = document.getElementById('chatMessages');
                 const messageInput = document.getElementById('messageInput');
+                const fileInput = document.getElementById('fileInput');
+                const attachedFiles = document.getElementById('attachedFiles');
+                const sendButton = document.getElementById('sendButton');
                 const typingIndicator = document.getElementById('typingIndicator');
+                
+                let attachedFilesList = [];
                 let isWaitingForResponse = false;
                 
-                function addMessage(text, isUser, messageType = 'final') {
+                // Авто-высота textarea
+                messageInput.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
+                });
+                
+                // Обработка выбора файлов
+                fileInput.addEventListener('change', function(e) {
+                    const files = Array.from(e.target.files);
+                    files.forEach(file => {
+                        if (!attachedFilesList.some(f => f.name === file.name)) {
+                            attachedFilesList.push(file);
+                            updateAttachedFilesDisplay();
+                        }
+                    });
+                    this.value = ''; // Сбрасываем input
+                });
+                
+                function updateAttachedFilesDisplay() {
+                    attachedFiles.innerHTML = '';
+                    attachedFilesList.forEach((file, index) => {
+                        const fileTag = document.createElement('div');
+                        fileTag.className = 'file-tag';
+                        fileTag.innerHTML = `
+                            📄 ${file.name}
+                            <button class="remove-file" onclick="removeFile(${index})">×</button>
+                        `;
+                        attachedFiles.appendChild(fileTag);
+                    });
+                    
+                    // Обновляем состояние кнопки отправки
+                    sendButton.disabled = attachedFilesList.length === 0 && !messageInput.value.trim();
+                }
+                
+                function removeFile(index) {
+                    attachedFilesList.splice(index, 1);
+                    updateAttachedFilesDisplay();
+                }
+                
+                function addMessage(text, isUser, messageType = 'final', files = []) {
                     const messageDiv = document.createElement('div');
                     
                     if (messageType === 'search') {
@@ -1478,8 +1623,28 @@ class AIHandler(BaseHTTPRequestHandler):
                     } else if (messageType === 'typing') {
                         messageDiv.className = 'typing-message';
                         messageDiv.innerHTML = text;
-                    } else if (messageType === 'zip-info') {
-                        messageDiv.className = 'zip-info';
+                    } else if (messageType === 'file') {
+                        messageDiv.className = 'file-message';
+                        files.forEach(file => {
+                            const fileInfo = document.createElement('div');
+                            fileInfo.className = 'file-info';
+                            fileInfo.innerHTML = `
+                                <div class="file-icon">📎</div>
+                                <div class="file-details">
+                                    <div class="file-name">${file.name}</div>
+                                    <div class="file-size">${formatFileSize(file.size)}</div>
+                                </div>
+                            `;
+                            messageDiv.appendChild(fileInfo);
+                        });
+                        if (text) {
+                            const textDiv = document.createElement('div');
+                            textDiv.style.marginTop = '10px';
+                            textDiv.textContent = text;
+                            messageDiv.appendChild(textDiv);
+                        }
+                    } else if (messageType === 'zip-analysis') {
+                        messageDiv.className = 'zip-analysis';
                         messageDiv.innerHTML = text;
                     } else {
                         messageDiv.className = isUser ? 'message user-message' : 'message ai-message';
@@ -1519,7 +1684,6 @@ class AIHandler(BaseHTTPRequestHandler):
                     
                     function typeChar() {
                         if (i < text.length) {
-                            // Добавляем символ
                             if (text[i] === '\\n') {
                                 element.innerHTML += '<br>';
                             } else {
@@ -1527,10 +1691,8 @@ class AIHandler(BaseHTTPRequestHandler):
                             }
                             i++;
                             
-                            // Прокручиваем вниз
                             chatMessages.scrollTop = chatMessages.scrollHeight;
                             
-                            // Случайная скорость для естественности
                             const variation = Math.random() * 20 - 10;
                             setTimeout(typeChar, speed + variation);
                         } else if (callback) {
@@ -1545,26 +1707,54 @@ class AIHandler(BaseHTTPRequestHandler):
                     if (isWaitingForResponse) return;
                     
                     const message = messageInput.value.trim();
-                    if (!message) return;
+                    const files = attachedFilesList;
                     
-                    // Clear input
+                    if (!message && files.length === 0) return;
+                    
+                    // Clear input and files
                     messageInput.value = '';
-                    isWaitingForResponse = true;
+                    attachedFilesList = [];
+                    updateAttachedFilesDisplay();
+                    messageInput.style.height = 'auto';
                     
-                    // Add user message
-                    addMessage(message, true);
+                    isWaitingForResponse = true;
+                    sendButton.disabled = true;
+                    
+                    // Add user message with files
+                    if (files.length > 0) {
+                        addMessage(message, true, 'file', files);
+                    } else if (message) {
+                        addMessage(message, true);
+                    }
                     
                     // Show searching status
-                    const searchMessage = addMessage('Поиск в интернете...', false, 'search');
+                    const searchMessage = addMessage('Обрабатываю запрос...', false, 'search');
                     
                     try {
-                        const response = await fetch('/chat', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ message: message })
-                        });
+                        let response;
+                        
+                        if (files.length > 0) {
+                            // Отправка с файлами
+                            const formData = new FormData();
+                            formData.append('message', message);
+                            files.forEach(file => {
+                                formData.append('files', file);
+                            });
+                            
+                            response = await fetch('/analyze-with-file', {
+                                method: 'POST',
+                                body: formData
+                            });
+                        } else {
+                            // Обычный запрос
+                            response = await fetch('/chat', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ message: message })
+                            });
+                        }
                         
                         const data = await response.json();
                         
@@ -1577,8 +1767,7 @@ class AIHandler(BaseHTTPRequestHandler):
                         
                         // Type out the response
                         typeText(aiMessage, data.response, 5, () => {
-                            // Convert to final message after typing
-                            aiMessage.className = 'message ai-message';
+                            aiMessage.className = data.response.includes('📦') ? 'zip-analysis' : 'message ai-message';
                             const time = new Date().toLocaleTimeString('ru-RU', { 
                                 hour: '2-digit', 
                                 minute: '2-digit' 
@@ -1586,403 +1775,30 @@ class AIHandler(BaseHTTPRequestHandler):
                             aiMessage.innerHTML = aiMessage.innerHTML + `<div class="message-time">${time}</div>`;
                             hideTyping();
                             isWaitingForResponse = false;
+                            sendButton.disabled = false;
                         });
                         
                     } catch (error) {
-                        // Remove search message
                         searchMessage.remove();
                         hideTyping();
-                        
-                        // Show error
                         addMessage('❌ Ошибка соединения с сервером. Попробуйте еще раз.', false);
                         console.error('Error:', error);
                         isWaitingForResponse = false;
+                        sendButton.disabled = false;
                     }
                 }
                 
-                // Send message on Enter key
+                // Send message on Enter key (Ctrl+Enter for new line)
                 messageInput.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter' && !isWaitingForResponse) {
+                    if (e.key === 'Enter' && !e.shiftKey && !isWaitingForResponse) {
+                        e.preventDefault();
                         sendMessage();
                     }
                 });
                 
-                // Focus input on load
-                messageInput.focus();
-                
-                // Auto-scroll to bottom on load
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-                
-                // Show ZIP info if mentioned in URL
-                if (window.location.search.includes('zip=info')) {
-                    addMessage('📦 <strong>Информация об анализе ZIP-архивов</strong><br><br>Я могу анализировать ZIP-файлы и показывать:<br>• 📁 Структуру папок и файлов<br>• 📊 Статистику по типам файлов<br>• 💻 Содержимое кода<br><br>Нажмите кнопку "📦 Анализ ZIP" вверху для загрузки файла.', false, 'zip-info');
-                }
-            </script>
-        </body>
-        </html>
-        '''
-        self.wfile.write(html.encode('utf-8'))
-    
-    def _serve_upload_form(self):
-        """Отдает HTML форму для загрузки ZIP-файлов"""
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html; charset=utf-8')
-        self.end_headers()
-        
-        html = '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Анализ ZIP-архивов - AI Assistant</title>
-            <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
-                
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    min-height: 100vh;
-                    padding: 20px;
-                    display: flex;
-                    justify-content: center;
-                    align-items: flex-start;
-                }
-                
-                .container {
-                    background: white;
-                    border-radius: 20px;
-                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-                    padding: 40px;
-                    max-width: 800px;
-                    width: 100%;
-                    margin: 20px;
-                }
-                
-                .header {
-                    text-align: center;
-                    margin-bottom: 30px;
-                }
-                
-                .header h1 {
-                    color: #2c3e50;
-                    margin-bottom: 10px;
-                    font-size: 2em;
-                }
-                
-                .header p {
-                    color: #7f8c8d;
-                    font-size: 1.1em;
-                }
-                
-                .upload-area {
-                    border: 3px dashed #3498db;
-                    border-radius: 15px;
-                    padding: 50px 30px;
-                    text-align: center;
-                    margin: 30px 0;
-                    transition: all 0.3s;
-                    background: #f8fafc;
-                }
-                
-                .upload-area.dragover {
-                    border-color: #2ecc71;
-                    background: #f0fff4;
-                }
-                
-                .upload-icon {
-                    font-size: 4em;
-                    margin-bottom: 20px;
-                }
-                
-                .file-input {
-                    display: none;
-                }
-                
-                .file-label {
-                    display: inline-block;
-                    background: linear-gradient(135deg, #3498db, #2980b9);
-                    color: white;
-                    padding: 15px 30px;
-                    border-radius: 25px;
-                    cursor: pointer;
-                    font-size: 1.1em;
-                    font-weight: 600;
-                    transition: transform 0.2s;
-                }
-                
-                .file-label:hover {
-                    transform: translateY(-2px);
-                }
-                
-                .file-info {
-                    margin-top: 15px;
-                    color: #7f8c8d;
-                }
-                
-                .btn {
-                    background: linear-gradient(135deg, #e74c3c, #c0392b);
-                    color: white;
-                    border: none;
-                    padding: 15px 30px;
-                    border-radius: 25px;
-                    cursor: pointer;
-                    font-size: 1.1em;
-                    font-weight: 600;
-                    transition: transform 0.2s;
-                    width: 100%;
-                    margin-top: 20px;
-                }
-                
-                .btn:hover {
-                    transform: translateY(-2px);
-                }
-                
-                .btn:disabled {
-                    background: #bdc3c7;
-                    cursor: not-allowed;
-                    transform: none;
-                }
-                
-                .result {
-                    margin-top: 30px;
-                    padding: 25px;
-                    background: #f8f9fa;
-                    border-radius: 15px;
-                    display: none;
-                }
-                
-                .result h3 {
-                    color: #2c3e50;
-                    margin-bottom: 15px;
-                }
-                
-                .result pre {
-                    white-space: pre-wrap;
-                    background: white;
-                    padding: 20px;
-                    border-radius: 10px;
-                    border-left: 4px solid #3498db;
-                    max-height: 500px;
-                    overflow-y: auto;
-                    font-family: 'Courier New', monospace;
-                    font-size: 0.9em;
-                }
-                
-                .loading {
-                    text-align: center;
-                    padding: 30px;
-                    display: none;
-                }
-                
-                .loading-spinner {
-                    border: 4px solid #f3f3f3;
-                    border-top: 4px solid #3498db;
-                    border-radius: 50%;
-                    width: 40px;
-                    height: 40px;
-                    animation: spin 1s linear infinite;
-                    margin: 0 auto 15px;
-                }
-                
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-                
-                .features {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                    gap: 20px;
-                    margin: 30px 0;
-                }
-                
-                .feature {
-                    text-align: center;
-                    padding: 20px;
-                    background: #f8f9fa;
-                    border-radius: 10px;
-                }
-                
-                .feature-icon {
-                    font-size: 2.5em;
-                    margin-bottom: 10px;
-                }
-                
-                .back-link {
-                    display: inline-block;
-                    margin-top: 20px;
-                    color: #3498db;
-                    text-decoration: none;
-                    font-weight: 600;
-                }
-                
-                .back-link:hover {
-                    text-decoration: underline;
-                }
-                
-                @media (max-width: 768px) {
-                    .container {
-                        padding: 20px;
-                        margin: 10px;
-                    }
-                    
-                    .header h1 {
-                        font-size: 1.5em;
-                    }
-                    
-                    .upload-area {
-                        padding: 30px 15px;
-                    }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>📦 Анализ ZIP-архивов</h1>
-                    <p>Загрузите ZIP-файл для детального анализа структуры и содержимого</p>
-                </div>
-                
-                <div class="features">
-                    <div class="feature">
-                        <div class="feature-icon">📁</div>
-                        <h3>Структура</h3>
-                        <p>Полная древовидная структура всех папок и файлов</p>
-                    </div>
-                    <div class="feature">
-                        <div class="feature-icon">📊</div>
-                        <h3>Статистика</h3>
-                        <p>Подробная статистика по типам файлов и размерам</p>
-                    </div>
-                    <div class="feature">
-                        <div class="feature-icon">💻</div>
-                        <h3>Анализ кода</h3>
-                        <p>Просмотр содержимого программных файлов</p>
-                    </div>
-                </div>
-                
-                <form id="uploadForm">
-                    <div class="upload-area" id="uploadArea">
-                        <div class="upload-icon">📁</div>
-                        <h3>Перетащите ZIP-файл сюда</h3>
-                        <p>или</p>
-                        <input type="file" id="zipFile" class="file-input" accept=".zip" required>
-                        <label for="zipFile" class="file-label">Выбрать файл</label>
-                        <div class="file-info" id="fileInfo">Файл не выбран</div>
-                    </div>
-                    
-                    <button type="submit" class="btn" id="analyzeBtn" disabled>
-                        🔍 Проанализировать архив
-                    </button>
-                </form>
-                
-                <div class="loading" id="loading">
-                    <div class="loading-spinner"></div>
-                    <p>Анализирую архив... Это может занять несколько секунд</p>
-                </div>
-                
-                <div class="result" id="result">
-                    <h3>📋 Результат анализа:</h3>
-                    <pre id="resultContent"></pre>
-                </div>
-                
-                <a href="/" class="back-link">← Назад к чату</a>
-            </div>
-
-            <script>
-                const uploadForm = document.getElementById('uploadForm');
-                const zipFileInput = document.getElementById('zipFile');
-                const fileInfo = document.getElementById('fileInfo');
-                const analyzeBtn = document.getElementById('analyzeBtn');
-                const uploadArea = document.getElementById('uploadArea');
-                const loading = document.getElementById('loading');
-                const result = document.getElementById('result');
-                const resultContent = document.getElementById('resultContent');
-                
-                // Обработка выбора файла
-                zipFileInput.addEventListener('change', function() {
-                    if (this.files[0]) {
-                        const file = this.files[0];
-                        fileInfo.textContent = `Выбран файл: ${file.name} (${formatFileSize(file.size)})`;
-                        analyzeBtn.disabled = false;
-                    } else {
-                        fileInfo.textContent = 'Файл не выбран';
-                        analyzeBtn.disabled = true;
-                    }
-                });
-                
-                // Drag and drop
-                uploadArea.addEventListener('dragover', function(e) {
-                    e.preventDefault();
-                    uploadArea.classList.add('dragover');
-                });
-                
-                uploadArea.addEventListener('dragleave', function() {
-                    uploadArea.classList.remove('dragover');
-                });
-                
-                uploadArea.addEventListener('drop', function(e) {
-                    e.preventDefault();
-                    uploadArea.classList.remove('dragover');
-                    
-                    const files = e.dataTransfer.files;
-                    if (files.length > 0 && files[0].name.endsWith('.zip')) {
-                        zipFileInput.files = files;
-                        fileInfo.textContent = `Выбран файл: ${files[0].name} (${formatFileSize(files[0].size)})`;
-                        analyzeBtn.disabled = false;
-                    } else {
-                        alert('Пожалуйста, выберите ZIP-файл');
-                    }
-                });
-                
-                // Обработка отправки формы
-                uploadForm.addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    
-                    if (!zipFileInput.files[0]) {
-                        alert('Пожалуйста, выберите ZIP-файл');
-                        return;
-                    }
-                    
-                    const formData = new FormData();
-                    formData.append('zip_file', zipFileInput.files[0]);
-                    
-                    // Показываем загрузку
-                    loading.style.display = 'block';
-                    result.style.display = 'none';
-                    analyzeBtn.disabled = true;
-                    
-                    try {
-                        const response = await fetch('/upload-zip', {
-                            method: 'POST',
-                            body: formData
-                        });
-                        
-                        const data = await response.json();
-                        
-                        // Скрываем загрузку
-                        loading.style.display = 'none';
-                        analyzeBtn.disabled = false;
-                        
-                        if (data.success) {
-                            resultContent.textContent = data.report;
-                            result.style.display = 'block';
-                            
-                            // Прокручиваем к результату
-                            result.scrollIntoView({ behavior: 'smooth' });
-                        } else {
-                            alert('Ошибка: ' + data.error);
-                        }
-                    } catch (error) {
-                        loading.style.display = 'none';
-                        analyzeBtn.disabled = false;
-                        alert('Ошибка загрузки: ' + error.message);
-                    }
+                // Enable/disable send button based on input
+                messageInput.addEventListener('input', function() {
+                    sendButton.disabled = attachedFilesList.length === 0 && !this.value.trim();
                 });
                 
                 function formatFileSize(bytes) {
@@ -1992,33 +1808,178 @@ class AIHandler(BaseHTTPRequestHandler):
                     const i = Math.floor(Math.log(bytes) / Math.log(k));
                     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
                 }
+                
+                // Focus input on load
+                messageInput.focus();
+                
+                // Auto-scroll to bottom on load
+                chatMessages.scrollTop = chatMessages.scrollHeight;
             </script>
         </body>
         </html>
         '''
         self.wfile.write(html.encode('utf-8'))
     
-    def _serve_zip_analysis_info(self):
-        """Информация о анализе ZIP-файлов"""
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        
-        info = {
-            "capabilities": [
-                "Анализ структуры папок и файлов",
-                "Статистика по типам файлов", 
-                "Чтение содержимого текстовых файлов",
-                "Анализ программного кода",
-                "Определение README файлов",
-                "Классификация файлов по типам"
-            ],
-            "supported_formats": ["ZIP"],
-            "max_file_size": "50MB"
-        }
-        
-        self.wfile.write(json.dumps(info).encode('utf-8'))
+    def _handle_file_upload(self):
+        """Обрабатывает загрузку файлов"""
+        try:
+            content_type = self.headers.get('Content-Type', '')
+            if not content_type.startswith('multipart/form-data'):
+                self.send_error(400, "Invalid content type")
+                return
+            
+            boundary_match = re.search(r'boundary=(.*)$', content_type)
+            if not boundary_match:
+                self.send_error(400, "No boundary found")
+                return
+            
+            boundary = boundary_match.group(1).encode()
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            parts = post_data.split(b'--' + boundary)
+            uploaded_files = []
+            
+            for part in parts:
+                if b'name="files"' in part and b'filename="' in part:
+                    filename_match = re.search(b'filename="([^"]+)"', part)
+                    if filename_match:
+                        filename = filename_match.group(1).decode('utf-8')
+                        
+                        # Извлекаем содержимое файла
+                        file_content = part.split(b'\r\n\r\n')[1].rsplit(b'\r\n', 1)[0]
+                        
+                        # Сохраняем файл
+                        temp_dir = "temp_uploads"
+                        os.makedirs(temp_dir, exist_ok=True)
+                        file_path = os.path.join(temp_dir, f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}")
+                        
+                        with open(file_path, 'wb') as f:
+                            f.write(file_content)
+                        
+                        uploaded_files.append({
+                            'filename': filename,
+                            'path': file_path,
+                            'size': len(file_content)
+                        })
+            
+            if uploaded_files:
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                
+                response = {
+                    "success": True,
+                    "files": uploaded_files,
+                    "message": f"Загружено {len(uploaded_files)} файл(ов)"
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+            else:
+                self.send_error(400, "No files uploaded")
+                
+        except Exception as e:
+            print(f"❌ Ошибка загрузки файлов: {e}")
+            self.send_error(500, f"Upload error: {str(e)}")
     
+    def _handle_analysis_with_file(self):
+        """Обрабатывает запросы с прикрепленными файлами"""
+        try:
+            content_type = self.headers.get('Content-Type', '')
+            if not content_type.startswith('multipart/form-data'):
+                self.send_error(400, "Invalid content type")
+                return
+            
+            boundary_match = re.search(r'boundary=(.*)$', content_type)
+            if not boundary_match:
+                self.send_error(400, "No boundary found")
+                return
+            
+            boundary = boundary_match.group(1).encode()
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            parts = post_data.split(b'--' + boundary)
+            message = ""
+            uploaded_files = []
+            
+            for part in parts:
+                if b'name="message"' in part:
+                    # Извлекаем текстовое сообщение
+                    message_content = part.split(b'\r\n\r\n')[1].rsplit(b'\r\n', 1)[0]
+                    message = message_content.decode('utf-8')
+                
+                elif b'name="files"' in part and b'filename="' in part:
+                    filename_match = re.search(b'filename="([^"]+)"', part)
+                    if filename_match:
+                        filename = filename_match.group(1).decode('utf-8')
+                        
+                        # Извлекаем содержимое файла
+                        file_content = part.split(b'\r\n\r\n')[1].rsplit(b'\r\n', 1)[0]
+                        
+                        # Сохраняем файл
+                        temp_dir = "temp_uploads"
+                        os.makedirs(temp_dir, exist_ok=True)
+                        file_path = os.path.join(temp_dir, f"chat_upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}")
+                        
+                        with open(file_path, 'wb') as f:
+                            f.write(file_content)
+                        
+                        uploaded_files.append({
+                            'filename': filename,
+                            'path': file_path,
+                            'size': len(file_content)
+                        })
+            
+            # Обрабатываем файлы
+            response_text = ""
+            if uploaded_files:
+                for file_info in uploaded_files:
+                    if file_info['filename'].lower().endswith('.zip'):
+                        # Анализ ZIP-архива
+                        analysis_result = self.ai.analyze_uploaded_zip(file_info['path'])
+                        response_text += f"\n\n📦 **Анализ архива {file_info['filename']}:**\n{analysis_result}"
+                    else:
+                        # Анализ текстового файла
+                        try:
+                            with open(file_info['path'], 'r', encoding='utf-8') as f:
+                                content = f.read(5000)  # Читаем первые 5000 символов
+                                response_text += f"\n\n📄 **Содержимое {file_info['filename']}:**\n```\n{content}\n```"
+                        except:
+                            response_text += f"\n\n📄 **Файл {file_info['filename']}:**\nНе удалось прочитать файл (возможно, бинарный файл)"
+                    
+                    # Удаляем временный файл
+                    try:
+                        os.remove(file_info['path'])
+                    except:
+                        pass
+            
+            # Добавляем ответ на текстовый запрос если есть
+            if message:
+                if response_text:
+                    response_text = f"**Ваш запрос:** {message}" + response_text
+                else:
+                    # Если нет файлов, используем обычный поиск
+                    chat_response = self.ai.generate_smart_response(message)
+                    response_text = chat_response
+            
+            if not response_text:
+                response_text = "Пожалуйста, введите запрос или загрузите файл для анализа."
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            
+            response = {
+                "success": True,
+                "response": response_text
+            }
+            self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+            
+        except Exception as e:
+            print(f"❌ Ошибка анализа с файлом: {e}")
+            self.send_error(500, f"Analysis error: {str(e)}")
+    
+    # Остальные методы остаются без изменений
     def _serve_stats(self):
         """Отдача статистики обучения"""
         stats = self.ai.get_learning_stats()
@@ -2060,81 +2021,6 @@ class AIHandler(BaseHTTPRequestHandler):
         
         response = {"status": "success", "message": result}
         self.wfile.write(json.dumps(response).encode('utf-8'))
-    
-    def _handle_zip_upload(self):
-        """Обрабатывает загрузку ZIP-файлов"""
-        try:
-            content_type = self.headers.get('Content-Type', '')
-            if not content_type.startswith('multipart/form-data'):
-                self.send_error(400, "Invalid content type")
-                return
-            
-            # Получаем boundary
-            boundary_match = re.search(r'boundary=(.*)$', content_type)
-            if not boundary_match:
-                self.send_error(400, "No boundary found")
-                return
-            
-            boundary = boundary_match.group(1).encode()
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            
-            # Разделяем на части
-            parts = post_data.split(b'--' + boundary)
-            
-            for part in parts:
-                if b'filename="' in part:
-                    # Извлекаем имя файла
-                    filename_match = re.search(b'filename="([^"]+)"', part)
-                    if filename_match:
-                        filename = filename_match.group(1).decode('utf-8')
-                        
-                        if not filename.lower().endswith('.zip'):
-                            self.send_error(400, "Only ZIP files are supported")
-                            return
-                        
-                        # Извлекаем содержимое файла
-                        file_content = part.split(b'\r\n\r\n')[1].rsplit(b'\r\n', 1)[0]
-                        
-                        # Создаем временную директорию
-                        temp_dir = "temp_uploads"
-                        os.makedirs(temp_dir, exist_ok=True)
-                        file_path = os.path.join(temp_dir, f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}")
-                        
-                        # Сохраняем файл
-                        with open(file_path, 'wb') as f:
-                            f.write(file_content)
-                        
-                        print(f"📥 Файл сохранен: {file_path}")
-                        
-                        # Анализируем архив
-                        report = self.ai.analyze_uploaded_zip(file_path)
-                        
-                        # Удаляем временный файл
-                        try:
-                            os.remove(file_path)
-                            print(f"🗑️ Временный файл удален: {file_path}")
-                        except Exception as e:
-                            print(f"⚠️ Не удалось удалить временный файл: {e}")
-                        
-                        # Отправляем результат
-                        self.send_response(200)
-                        self.send_header('Content-type', 'application/json')
-                        self.end_headers()
-                        
-                        response = {
-                            "success": True, 
-                            "report": report,
-                            "filename": filename
-                        }
-                        self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
-                        return
-            
-            self.send_error(400, "No file uploaded")
-            
-        except Exception as e:
-            print(f"❌ Ошибка загрузки ZIP: {e}")
-            self.send_error(500, f"Upload error: {str(e)}")
     
     def _handle_chat(self):
         """Обрабатывает чат-запросы"""
