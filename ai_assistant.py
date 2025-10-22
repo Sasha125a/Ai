@@ -58,64 +58,149 @@ class AdvancedWebSearch:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         })
+        self.search_engines = ['bing', 'duckduckgo', 'wikipedia', 'stackoverflow']
     
-    def search_internet(self, query, max_results=3):
-        """Умный поиск с несколькими источниками"""
-        print(f"🔍 Запускаю улучшенный поиск для: {query}")
+    def search_internet(self, query, max_results=5):
+        """Умный поиск с анализом типа запроса и специализированными источниками"""
+        print(f"🔍 Запускаю точный поиск для: '{query}'")
+        
+        # Анализируем тип запроса для оптимизации поиска
+        query_type = self._analyze_query_type(query)
+        print(f"🎯 Тип запроса: {query_type}")
+        
+        # Выбираем стратегию поиска в зависимости от типа запроса
+        search_strategy = self._get_search_strategy(query_type)
+        
         all_results = []
+        used_engines = set()
         
-        # 1. Пробуем Bing (самый надежный бесплатный вариант)
-        try:
-            bing_results = self._bing_search(query, max_results)
-            all_results.extend(bing_results)
-            print(f"✅ Bing найдено: {len(bing_results)} результатов")
-        except Exception as e:
-            print(f"❌ Bing ошибка: {e}")
+        # Выполняем поиск по стратегии
+        for engine in search_strategy:
+            if len(all_results) >= max_results:
+                break
+                
+            if engine not in used_engines:
+                try:
+                    results = self._search_with_engine(engine, query, query_type, max_results - len(all_results))
+                    if results:
+                        all_results.extend(results)
+                        used_engines.add(engine)
+                        print(f"✅ {engine.capitalize()} найдено: {len(results)} результатов")
+                except Exception as e:
+                    print(f"❌ {engine.capitalize()} ошибка: {e}")
         
-        # 2. DuckDuckGo как запасной вариант
+        # Если результатов мало, пробуем остальные движки
         if len(all_results) < max_results:
-            try:
-                ddg_results = self._duckduckgo_search(query, max_results - len(all_results))
-                all_results.extend(ddg_results)
-                print(f"✅ DuckDuckGo найдено: {len(ddg_results)} результатов")
-            except Exception as e:
-                print(f"❌ DuckDuckGo ошибка: {e}")
+            remaining_engines = [e for e in self.search_engines if e not in used_engines]
+            for engine in remaining_engines:
+                if len(all_results) >= max_results:
+                    break
+                try:
+                    results = self._search_with_engine(engine, query, query_type, max_results - len(all_results))
+                    if results:
+                        all_results.extend(results)
+                        print(f"✅ {engine.capitalize()} (резерв) найдено: {len(results)} результатов")
+                except Exception as e:
+                    print(f"❌ {engine.capitalize()} ошибка: {e}")
         
-        # 3. Wikipedia для энциклопедических справок
-        if any(word in query.lower() for word in ['что такое', 'кто такой', 'определение', 'означает']):
-            try:
-                wiki_result = self._wikipedia_search(query)
-                if wiki_result:
-                    all_results.append(wiki_result)
-                    print(f"✅ Wikipedia найдено: 1 результат")
-            except Exception as e:
-                print(f"❌ Wikipedia ошибка: {e}")
+        # Сортируем результаты по релевантности
+        sorted_results = self._sort_by_relevance(query, all_results)
         
-        print(f"🎯 Всего найдено результатов: {len(all_results)}")
-        return all_results[:max_results]
+        print(f"🎯 Всего найдено результатов: {len(sorted_results)}")
+        return sorted_results[:max_results]
     
-    def _bing_search(self, query, max_results):
-        """Поиск через парсинг Bing - самый надежный метод"""
+    def _analyze_query_type(self, query):
+        """Анализирует тип запроса для оптимизации поиска"""
+        query_lower = query.lower()
+        
+        # Программирование и код
+        if any(word in query_lower for word in ['код', 'программир', 'функция', 'класс', 'ошибка', 'python', 'javascript', 'java']):
+            return 'programming'
+        
+        # Определения и объяснения
+        elif any(phrase in query_lower for phrase in ['что такое', 'кто такой', 'определение', 'означает', 'объясни']):
+            return 'definition'
+        
+        # Как сделать (инструкции)
+        elif any(phrase in query_lower for phrase in ['как сделать', 'как создать', 'как настроить', 'как использовать', 'инструкция']):
+            return 'howto'
+        
+        # Сравнение
+        elif any(word in query_lower for word in ['разница', 'сравнение', 'лучше', 'хуже', 'vs', 'versus']):
+            return 'comparison'
+        
+        # Технические вопросы
+        elif any(word in query_lower for word in ['ошибка', 'проблема', 'не работает', 'исправить', 'баг']):
+            return 'technical'
+        
+        # Факты и информация
+        elif any(word in query_lower for word in ['сколько', 'когда', 'где', 'почему', 'зачем']):
+            return 'fact'
+        
+        else:
+            return 'general'
+    
+    def _get_search_strategy(self, query_type):
+        """Возвращает оптимальную стратегию поиска для типа запроса"""
+        strategies = {
+            'programming': ['stackoverflow', 'bing', 'duckduckgo'],
+            'definition': ['wikipedia', 'bing', 'duckduckgo'],
+            'howto': ['bing', 'stackoverflow', 'duckduckgo'],
+            'comparison': ['bing', 'duckduckgo'],
+            'technical': ['stackoverflow', 'bing', 'duckduckgo'],
+            'fact': ['bing', 'wikipedia', 'duckduckgo'],
+            'general': ['bing', 'duckduckgo', 'wikipedia']
+        }
+        return strategies.get(query_type, ['bing', 'duckduckgo'])
+    
+    def _search_with_engine(self, engine, query, query_type, max_results):
+        """Поиск с использованием конкретного движка"""
+        if engine == 'bing':
+            return self._bing_search(query, max_results, query_type)
+        elif engine == 'duckduckgo':
+            return self._duckduckgo_search(query, max_results)
+        elif engine == 'wikipedia':
+            return self._wikipedia_search(query, max_results)
+        elif engine == 'stackoverflow':
+            return self._stackoverflow_search(query, max_results)
+        return []
+    
+    def _bing_search(self, query, max_results, query_type):
+        """Улучшенный поиск через Bing с оптимизацией запроса"""
         try:
+            # Оптимизируем запрос для Bing
+            optimized_query = self._optimize_query(query, query_type, 'bing')
+            
             url = "https://www.bing.com/search"
-            params = {'q': query, 'count': max_results}
+            params = {'q': optimized_query, 'count': max_results + 2}  # Берем немного больше для фильтрации
             
             response = self.session.get(url, params=params, timeout=15)
             response.raise_for_status()
             
             results = []
             
-            # Улучшенные регулярки для парсинга Bing
-            # Ищем блоки с результатами
-            pattern = r'<li class="b_algo">(.*?)</li>'
-            items = re.findall(pattern, response.text, re.DOTALL)
+            # Несколько паттернов для надежного парсинга
+            patterns = [
+                r'<li class="b_algo">(.*?)</li>',
+                r'<li class="b_algo"[^>]*>(.*?)</li>',
+                r'<div class="b_algo">(.*?)</div>'
+            ]
             
-            for item in items[:max_results]:
+            for pattern in patterns:
+                items = re.findall(pattern, response.text, re.DOTALL)
+                if items:
+                    break
+            
+            for item in items[:max_results + 2]:
                 try:
                     # Извлекаем заголовок
                     title_match = re.search(r'<h2>\s*<a[^>]*>(.*?)</a>\s*</h2>', item, re.DOTALL)
+                    if not title_match:
+                        title_match = re.search(r'<a[^>]*>(.*?)</a>', item, re.DOTALL)
+                    
                     # Извлекаем ссылку
                     url_match = re.search(r'href="([^"]+)"', item)
+                    
                     # Извлекаем описание
                     desc_match = re.search(r'<p[^>]*>(.*?)</p>', item, re.DOTALL)
                     
@@ -123,31 +208,34 @@ class AdvancedWebSearch:
                         title = re.sub(r'<.*?>', '', title_match.group(1)).strip()
                         url = url_match.group(1)
                         
-                        # Очищаем описание от HTML тегов
+                        # Очищаем описание
                         snippet = ""
                         if desc_match:
                             snippet = re.sub(r'<.*?>', '', desc_match.group(1)).strip()
-                            snippet = re.sub(r'\s+', ' ', snippet)  # Убираем лишние пробелы
+                            snippet = re.sub(r'\s+', ' ', snippet)
                         
-                        # Проверяем, что это нормальная ссылка
-                        if url.startswith('http'):
+                        # Проверяем релевантность
+                        if (self._is_relevant_result(query, title, snippet) and 
+                            url.startswith('http') and
+                            not any(domain in url for domain in ['bing.com', 'microsoft.com'])):
+                            
                             results.append({
-                                'title': title[:100] + '...' if len(title) > 100 else title,
-                                'snippet': snippet[:250] + '...' if len(snippet) > 250 else snippet,
+                                'title': title[:120],
+                                'snippet': snippet[:350],
                                 'source': 'Bing',
-                                'url': url
+                                'url': url,
+                                'relevance_score': self._calculate_relevance(query, title, snippet)
                             })
                 except Exception as e:
-                    print(f"⚠️ Ошибка парсинга элемента Bing: {e}")
                     continue
             
-            return results
+            return results[:max_results]
         except Exception as e:
             print(f"❌ Ошибка парсинга Bing: {e}")
             return []
     
     def _duckduckgo_search(self, query, max_results):
-        """Резервный поиск через DuckDuckGo"""
+        """Улучшенный поиск через DuckDuckGo"""
         try:
             url = "https://api.duckduckgo.com/"
             params = {
@@ -166,23 +254,34 @@ class AdvancedWebSearch:
                     'title': data.get('Heading', 'Информация из интернета'),
                     'snippet': data.get('AbstractText'),
                     'source': 'DuckDuckGo',
-                    'url': data.get('AbstractURL', '')
+                    'url': data.get('AbstractURL', ''),
+                    'relevance_score': 0.8
                 })
             
-            return results
+            # Также получаем связанные темы
+            if data.get('RelatedTopics'):
+                for topic in data.get('RelatedTopics', [])[:max_results-1]:
+                    if topic.get('Text') and topic.get('FirstURL'):
+                        results.append({
+                            'title': topic.get('Text', '')[:100],
+                            'snippet': topic.get('Text', ''),
+                            'source': 'DuckDuckGo',
+                            'url': topic.get('FirstURL', ''),
+                            'relevance_score': 0.6
+                        })
+            
+            return results[:max_results]
         except Exception as e:
             print(f"❌ Ошибка DuckDuckGo: {e}")
             return []
     
-    def _wikipedia_search(self, query):
-        """Поиск в Wikipedia для определений"""
+    def _wikipedia_search(self, query, max_results):
+        """Поиск в Wikipedia с улучшенным извлечением ключевых слов"""
         try:
-            # Извлекаем ключевое слово после "что такое"
-            clean_query = re.sub(r'что такое|кто такой|определение|означает', '', query, flags=re.IGNORECASE).strip()
-            clean_query = clean_query.split('?')[0].split('.')[0].strip()  # Убираем знаки вопроса и точки
-            
-            if len(clean_query) < 2:  # Слишком короткий запрос
-                return None
+            # Улучшенное извлечение ключевого слова
+            clean_query = self._extract_main_keyword(query)
+            if not clean_query or len(clean_query) < 2:
+                return []
                 
             url = f"https://ru.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(clean_query)}"
             response = self.session.get(url, timeout=8)
@@ -191,16 +290,115 @@ class AdvancedWebSearch:
                 data = response.json()
                 snippet = data.get('extract', '')
                 if snippet:
-                    return {
+                    return [{
                         'title': f"📚 {data.get('title', 'Википедия')}",
                         'snippet': snippet,
                         'source': 'Wikipedia',
-                        'url': data.get('content_urls', {}).get('desktop', {}).get('page', '')
-                    }
+                        'url': data.get('content_urls', {}).get('desktop', {}).get('page', ''),
+                        'relevance_score': 0.9
+                    }]
         except Exception as e:
             print(f"⚠️ Wikipedia поиск не удался: {e}")
-        return None
-
+        return []
+    
+    def _stackoverflow_search(self, query, max_results):
+        """Поиск в StackOverflow для программистских вопросов"""
+        try:
+            # Оптимизируем запрос для StackOverflow
+            so_query = re.sub(r'[^\w\s]', ' ', query)  # Убираем спецсимволы
+            so_query = ' '.join(so_query.split()[:6])  # Берем первые 6 слов
+            
+            url = "https://api.stackexchange.com/2.3/search/advanced"
+            params = {
+                'order': 'desc',
+                'sort': 'relevance',
+                'q': so_query,
+                'site': 'stackoverflow',
+                'filter': 'withbody',
+                'pagesize': max_results
+            }
+            
+            response = self.session.get(url, params=params, timeout=10)
+            data = response.json()
+            
+            results = []
+            for item in data.get('items', [])[:max_results]:
+                # Извлекаем чистый текст из HTML
+                body = re.sub(r'<.*?>', '', item.get('body', ''))
+                snippet = body[:300] + '...' if len(body) > 300 else body
+                
+                results.append({
+                    'title': item.get('title', ''),
+                    'snippet': snippet,
+                    'source': 'StackOverflow',
+                    'url': item.get('link', ''),
+                    'relevance_score': 0.85
+                })
+            
+            return results
+        except Exception as e:
+            print(f"❌ Ошибка StackOverflow: {e}")
+            return []
+    
+    def _optimize_query(self, query, query_type, engine):
+        """Оптимизирует запрос для конкретного поискового движка"""
+        # Убираем лишние слова
+        stop_words = {'пожалуйста', 'можете', 'расскажите', 'подскажите'}
+        words = [word for word in query.split() if word.lower() not in stop_words]
+        base_query = ' '.join(words)
+        
+        # Добавляем модификаторы в зависимости от типа запроса и движка
+        if query_type == 'programming' and engine == 'bing':
+            return base_query + ' site:stackoverflow.com OR site:github.com'
+        elif query_type == 'definition':
+            return f'"{base_query}" определение'
+        elif query_type == 'howto':
+            return base_query + ' инструкция руководство'
+        
+        return base_query
+    
+    def _extract_main_keyword(self, query):
+        """Извлекает основное ключевое слово из запроса"""
+        # Убираем вопросительные слова
+        query = re.sub(r'что такое|кто такой|определение|означает|объясни', '', query, flags=re.IGNORECASE)
+        # Убираем знаки препинания в конце
+        query = re.sub(r'[?.!]$', '', query.strip())
+        # Берем первое существительное или все, если короткий запрос
+        words = query.strip().split()
+        return words[0] if words else ""
+    
+    def _is_relevant_result(self, query, title, snippet):
+        """Проверяет релевантность результата"""
+        query_words = set(query.lower().split())
+        content = (title + ' ' + snippet).lower()
+        
+        # Считаем количество совпадающих слов
+        matches = sum(1 for word in query_words if word in content and len(word) > 2)
+        return matches >= max(1, len(query_words) // 2)
+    
+    def _calculate_relevance(self, query, title, snippet):
+        """Вычисляет оценку релевантности от 0 до 1"""
+        query_words = set(word for word in query.lower().split() if len(word) > 2)
+        if not query_words:
+            return 0.5
+            
+        content = (title + ' ' + snippet).lower()
+        
+        # Считаем совпадения в заголовке (более важно)
+        title_matches = sum(1 for word in query_words if word in title.lower())
+        # Считаем совпадения в сниппете
+        snippet_matches = sum(1 for word in query_words if word in snippet.lower())
+        
+        total_score = (title_matches * 2 + snippet_matches) / (len(query_words) * 3)
+        return min(1.0, total_score)
+    
+    def _sort_by_relevance(self, query, results):
+        """Сортирует результаты по релевантности"""
+        for result in results:
+            if 'relevance_score' not in result:
+                result['relevance_score'] = self._calculate_relevance(query, result['title'], result['snippet'])
+        
+        return sorted(results, key=lambda x: x.get('relevance_score', 0), reverse=True)
 class TextKnowledgeBase:
     """Простая текстовая база знаний в JSON файле"""
     
