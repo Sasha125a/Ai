@@ -353,21 +353,26 @@ class EnhancedLearningAI:
             search_results = self.web_search.search_internet(user_message, max_results=3)
             
             if search_results:
-                # Формируем ответ из нескольких результатов
-                answer_parts = ["🌐 **Найдено в интернете:**\n"]
+                # Формируем красивый ответ
+                answer_parts = [f"**🔍 По вашему запросу найдено:**\n"]
                 
                 for i, result in enumerate(search_results, 1):
                     title = result.get('title', 'Без названия')
-                    snippet = result.get('snippet', '')
+                    snippet = result.get('snippet', 'Информация не найдена')
                     source = result.get('source', 'Неизвестный источник')
-                    
+                
+                    # Ограничиваем длину сниппета
+                    if len(snippet) > 300:
+                        snippet = snippet[:300] + "..."
+                
                     answer_parts.append(f"\n**{i}. {title}**")
                     answer_parts.append(f"{snippet}")
                     if result.get('url'):
-                        answer_parts.append(f"*Источник: {source}*")
-                
+                        answer_parts.append(f"*📚 Источник: {source}*")
+                    answer_parts.append("")  # пустая строка для разделения
+            
                 full_answer = "\n".join(answer_parts)
-                
+            
                 # Сохраняем в базу знаний для будущего использования
                 tags = self._extract_tags_from_query(user_message)
                 self.knowledge_base.add_entry(
@@ -378,16 +383,30 @@ class EnhancedLearningAI:
                     tags=tags,
                     confidence=0.9
                 )
-                
+            
                 print(f"✅ Найден ответ в интернете для: {user_message[:50]}...")
                 return full_answer, "web_search"
             else:
                 print(f"❌ Не найдено результатов для: {user_message}")
-                return None, None
-                
-        except Exception as e:
-            print(f"❌ Ошибка веб-поиска: {e}")
-            return None, None
+                # Возвращаем информационный ответ
+                info_answer = (
+                    f"**🔍 По запросу '{user_message}' не найдено точных совпадений.**\n\n"
+                    f"*Возможные причины:*\n"
+                    f"• Вопрос слишком специфический\n"
+                    f"• Требуется уточнение формулировки\n"
+                    f"• Информация может быть ограниченной\n\n"
+                    f"Попробуйте переформулировать вопрос или задать его более конкретно."
+                )
+                return info_answer, "generated"
+            
+    except Exception as e:
+        print(f"❌ Ошибка веб-поиска: {e}")
+        error_answer = (
+            f"**⚠️ Произошла ошибка при поиске**\n\n"
+            f"Не удалось выполнить поиск в интернете. "
+            f"Попробуйте повторить запрос позже или задать другой вопрос."
+        )
+        return error_answer, "generated"
     
     def _generate_web_fallback_response(self, user_message, intent):
         """Генерация ответа когда даже интернет не помог"""
@@ -440,19 +459,20 @@ class SmartAI:
         message_lower = message.lower()
         
         if any(word in message_lower for word in ['привет', 'здравствуй', 'hello', 'hi']):
-            return "Привет! 🖐️ Я AI-помощник с доступом к интернету. Задавайте любой вопрос - найду актуальную информацию! 🌐\n\n🤖 Сгенерированный ответ"
+            return "Привет! 🖐️ Я AI-помощник с доступом к интернету. Задавайте любой вопрос - найду актуальную информацию! 🌐"
         
         if any(word in message_lower for word in ['пока', 'до свидания', 'bye']):
-            return "До свидания! Возвращайтесь с новыми вопросами! 👋\n\n🤖 Сгенерированный ответ"
+            return "До свидания! Возвращайтесь с новыми вопросами! 👋"
         
         if any(word in message_lower for word in ['помощь', 'help', 'что ты умеешь']):
-            return "🦾 **Мои возможности:**\n\n• 🔍 **Поиск в интернете** - отвечаю на любые вопросы\n• 💻 **Программирование** - код, алгоритмы, технологии\n• 📚 **Объяснения** - сложные концепции простыми словами\n• 🎯 **Факты** - актуальная информация из сети\n\nПросто спросите о чем угодно! 💫\n\n🤖 Сгенерированный ответ"
+            return "🦾 **Мои возможности:**\n\n• 🔍 **Поиск в интернете** - отвечаю на любые вопросы\n• 💻 **Программирование** - код, алгоритмы, технологии\n• 📚 **Объяснения** - сложные концепции простыми словами\n• 🎯 **Факты** - актуальная информация из сети\n\nПросто спросите о чем угодно! 💫"
         
         # Используем EnhancedLearningAI который ВСЕГДА ищет в интернете
         intents = self.learning_ai.classifier.predict(message)
         entities = self.extract_entities(message)
         primary_intent = intents[0] if intents else "unknown"
         
+        print(f"🔍 Начинаю поиск для: {message}")
         response, confidence, source = self.learning_ai.find_best_response(
             message, primary_intent, entities, use_web_search=True
         )
@@ -466,6 +486,9 @@ class SmartAI:
         if source == "web_search":
             self.learning_stats['web_searches'] += 1
             self.learning_stats['successful_searches'] += 1
+            print(f"✅ Найден ответ через веб-поиск: {message[:30]}...")
+        else:
+            print(f"💡 Ответ из базы знаний: {message[:30]}...")
         
         # Сохраняем в историю
         self.conversation_history.append({
@@ -480,6 +503,15 @@ class SmartAI:
         if len(self.conversation_history) > 50:
             self.conversation_history = self.conversation_history[-20:]
         
+        # Добавляем информацию об источнике в ответ
+        source_info = {
+            "knowledge_base": "\n\n💾 *Ответ из базы знаний*",
+            "web_search": "\n\n🌐 *Информация найдена в интернете*", 
+            "generated": "\n\n🤖 *Сгенерированный ответ*"
+        }
+        
+        response += source_info.get(source, "")
+        
         return response
     
     def extract_entities(self, message):
@@ -488,19 +520,32 @@ class SmartAI:
     
     def get_learning_stats(self):
         """Получение статистики"""
+        total_searches = max(1, self.learning_stats['web_searches'])
+        success_rate = (self.learning_stats['successful_searches'] / total_searches) * 100
+        
         return {
             'total_conversations': self.learning_stats['conversations_processed'],
             'knowledge_base_entries': self.learning_stats['knowledge_base_entries'],
             'web_searches': self.learning_stats['web_searches'],
             'successful_searches': self.learning_stats['successful_searches'],
-            'success_rate': (self.learning_stats['successful_searches'] / 
-                           max(1, self.learning_stats['web_searches'])) * 100
+            'success_rate': round(success_rate, 1),
+            'conversation_history_length': len(self.conversation_history)
         }
     
     def export_knowledge_base(self):
         """Экспорт базы знаний"""
         return self.learning_ai.export_knowledge()
-        
+    
+    def get_conversation_history(self, limit=10):
+        """Получение истории разговоров"""
+        return self.conversation_history[-limit:] if self.conversation_history else []
+    
+    def clear_conversation_history(self):
+        """Очистка истории разговоров"""
+        self.conversation_history.clear()
+        return "История разговоров очищена"
+
+
 class AIHandler(BaseHTTPRequestHandler):
     ai = SmartAI()
     
@@ -509,26 +554,18 @@ class AIHandler(BaseHTTPRequestHandler):
             self._serve_html()
         elif self.path == '/stats':
             self._serve_stats()
-        elif self.path == '/vocab-stats':
-            self._serve_vocab_stats()
+        elif self.path == '/history':
+            self._serve_history()
         elif self.path == '/export':
             self._export_knowledge()
         else:
             self.send_error(404, "Not Found")
     
-    def _serve_vocab_stats(self):
-        """Отдача статистики словаря"""
-        vocab_stats = self.ai.get_vocabulary_stats()
-        
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        
-        self.wfile.write(json.dumps(vocab_stats).encode('utf-8'))
-    
     def do_POST(self):
         if self.path == '/chat':
             self._handle_chat()
+        elif self.path == '/clear-history':
+            self._clear_history()
         else:
             self.send_error(404, "Not Found")
     
@@ -717,6 +754,52 @@ class AIHandler(BaseHTTPRequestHandler):
                     }
                 }
                 
+                .search-status {
+                    background: linear-gradient(135deg, #ffd700, #ff8c00);
+                    color: white;
+                    padding: 10px 16px;
+                    border-radius: 18px;
+                    margin: 10px 0;
+                    max-width: 200px;
+                    border-bottom-left-radius: 5px;
+                    animation: pulse 1.5s infinite;
+                    font-weight: bold;
+                }
+                
+                @keyframes pulse {
+                    0% { opacity: 0.7; }
+                    50% { opacity: 1; }
+                    100% { opacity: 0.7; }
+                }
+                
+                .typing-message {
+                    background: white;
+                    color: #333;
+                    border: 2px solid #e9ecef;
+                    border-bottom-left-radius: 5px;
+                    margin: 10px 0;
+                    max-width: 80%;
+                    padding: 12px 16px;
+                    border-radius: 18px;
+                }
+                
+                .message-final {
+                    background: white;
+                    color: #333;
+                    border: 2px solid #e9ecef;
+                    border-bottom-left-radius: 5px;
+                    margin: 10px 0;
+                    max-width: 80%;
+                    padding: 12px 16px;
+                    border-radius: 18px;
+                    animation: slideIn 0.3s ease;
+                }
+                
+                @keyframes slideIn {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                
                 .code-block {
                     background: #2c3e50;
                     color: #ecf0f1;
@@ -773,17 +856,16 @@ class AIHandler(BaseHTTPRequestHandler):
             <div class="chat-container">
                 <div class="chat-header">
                     <h1>🧠 AI Assistant</h1>
-                    <p>Задайте вопрос о программировании</p>
+                    <p>Задайте вопрос - найду ответ в интернете!</p>
                 </div>
                 
                 <div class="chat-messages" id="chatMessages">
                     <div class="message ai-message">
-                        <strong>Привет! Я ваш AI-помощник 🤖</strong><br><br>
-                        Я могу:<br>
-                        • 🔍 Искать информацию в интернете<br>
-                        • 💻 Показывать примеры кода<br>
-                        • 📚 Объяснять концепции программирования<br><br>
-                        Просто задайте вопрос!
+                        <strong>Привет! Я ваш AI-помощник с доступом к интернету 🌐</strong><br><br>
+                        Просто задайте любой вопрос, и я найду актуальную информацию!<br>
+                        • 🔍 Поиск в реальном времени<br>
+                        • 💻 Ответы на любые темы<br>
+                        • 🚀 Быстрые результаты
                     </div>
                 </div>
                 
@@ -796,7 +878,7 @@ class AIHandler(BaseHTTPRequestHandler):
                 </div>
                 
                 <div class="chat-input-container">
-                    <input type="text" class="chat-input" id="messageInput" placeholder="Введите ваше сообщение..." autocomplete="off">
+                    <input type="text" class="chat-input" id="messageInput" placeholder="Введите ваш вопрос..." autocomplete="off">
                     <button class="send-button" onclick="sendMessage()">Отправить</button>
                 </div>
             </div>
@@ -805,26 +887,38 @@ class AIHandler(BaseHTTPRequestHandler):
                 const chatMessages = document.getElementById('chatMessages');
                 const messageInput = document.getElementById('messageInput');
                 const typingIndicator = document.getElementById('typingIndicator');
+                let isWaitingForResponse = false;
                 
-                function addMessage(text, isUser) {
+                function addMessage(text, isUser, messageType = 'final') {
                     const messageDiv = document.createElement('div');
-                    messageDiv.className = isUser ? 'message user-message' : 'message ai-message';
                     
-                    // Format text with code blocks
-                    let formattedText = text;
-                    if (text.includes('```')) {
-                        formattedText = text.replace(/```(\\w+)?\\n([\\s\\S]*?)```/g, '<div class="code-block">$2</div>');
+                    if (messageType === 'search') {
+                        messageDiv.className = 'search-status';
+                        messageDiv.innerHTML = `🔍 ${text}`;
+                    } else if (messageType === 'typing') {
+                        messageDiv.className = 'typing-message';
+                        messageDiv.innerHTML = text;
+                    } else {
+                        messageDiv.className = isUser ? 'message user-message' : 'message ai-message';
+                        
+                        // Format text with code blocks
+                        let formattedText = text;
+                        if (text.includes('```')) {
+                            formattedText = text.replace(/```(\\w+)?\\n([\\s\\S]*?)```/g, '<div class="code-block">$2</div>');
+                        }
+                        formattedText = formattedText.replace(/\\n/g, '<br>');
+                        
+                        const time = new Date().toLocaleTimeString('ru-RU', { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                        });
+                        
+                        messageDiv.innerHTML = `${formattedText}<div class="message-time">${time}</div>`;
                     }
-                    formattedText = formattedText.replace(/\\n/g, '<br>');
                     
-                    const time = new Date().toLocaleTimeString('ru-RU', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                    });
-                    
-                    messageDiv.innerHTML = `${formattedText}<div class="message-time">${time}</div>`;
                     chatMessages.appendChild(messageDiv);
                     chatMessages.scrollTop = chatMessages.scrollHeight;
+                    return messageDiv;
                 }
                 
                 function showTyping() {
@@ -836,18 +930,49 @@ class AIHandler(BaseHTTPRequestHandler):
                     typingIndicator.style.display = 'none';
                 }
                 
+                function typeText(element, text, speed = 10, callback = null) {
+                    let i = 0;
+                    element.innerHTML = '';
+                    
+                    function typeChar() {
+                        if (i < text.length) {
+                            // Добавляем символ
+                            if (text[i] === '\\n') {
+                                element.innerHTML += '<br>';
+                            } else {
+                                element.innerHTML += text[i];
+                            }
+                            i++;
+                            
+                            // Прокручиваем вниз
+                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                            
+                            // Случайная скорость для естественности
+                            const variation = Math.random() * 20 - 10;
+                            setTimeout(typeChar, speed + variation);
+                        } else if (callback) {
+                            callback();
+                        }
+                    }
+                    
+                    typeChar();
+                }
+                
                 async function sendMessage() {
+                    if (isWaitingForResponse) return;
+                    
                     const message = messageInput.value.trim();
                     if (!message) return;
                     
                     // Clear input
                     messageInput.value = '';
+                    isWaitingForResponse = true;
                     
                     // Add user message
                     addMessage(message, true);
                     
-                    // Show typing indicator
-                    showTyping();
+                    // Show searching status
+                    const searchMessage = addMessage('Поиск в интернете...', false, 'search');
                     
                     try {
                         const response = await fetch('/chat', {
@@ -860,22 +985,41 @@ class AIHandler(BaseHTTPRequestHandler):
                         
                         const data = await response.json();
                         
-                        // Hide typing indicator
-                        hideTyping();
+                        // Remove search message
+                        searchMessage.remove();
                         
-                        // Add AI response
-                        addMessage(data.response, false);
+                        // Add AI response with typing effect
+                        const aiMessage = addMessage('', false, 'typing');
+                        showTyping();
+                        
+                        // Type out the response
+                        typeText(aiMessage, data.response, 5, () => {
+                            // Convert to final message after typing
+                            aiMessage.className = 'message ai-message';
+                            const time = new Date().toLocaleTimeString('ru-RU', { 
+                                hour: '2-digit', 
+                                minute: '2-digit' 
+                            });
+                            aiMessage.innerHTML = aiMessage.innerHTML + `<div class="message-time">${time}</div>`;
+                            hideTyping();
+                            isWaitingForResponse = false;
+                        });
                         
                     } catch (error) {
+                        // Remove search message
+                        searchMessage.remove();
                         hideTyping();
-                        addMessage('❌ Ошибка соединения с сервером', false);
+                        
+                        // Show error
+                        addMessage('❌ Ошибка соединения с сервером. Попробуйте еще раз.', false);
                         console.error('Error:', error);
+                        isWaitingForResponse = false;
                     }
                 }
                 
                 // Send message on Enter key
                 messageInput.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
+                    if (e.key === 'Enter' && !isWaitingForResponse) {
                         sendMessage();
                     }
                 });
@@ -901,6 +1045,16 @@ class AIHandler(BaseHTTPRequestHandler):
         
         self.wfile.write(json.dumps(stats).encode('utf-8'))
     
+    def _serve_history(self):
+        """Отдача истории разговоров"""
+        history = self.ai.get_conversation_history(limit=20)
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        
+        self.wfile.write(json.dumps(history).encode('utf-8'))
+    
     def _export_knowledge(self):
         """Экспорт базы знаний"""
         export_file = self.ai.export_knowledge_base()
@@ -910,6 +1064,17 @@ class AIHandler(BaseHTTPRequestHandler):
         self.end_headers()
         
         response = {"status": "success", "export_file": export_file}
+        self.wfile.write(json.dumps(response).encode('utf-8'))
+    
+    def _clear_history(self):
+        """Очистка истории разговоров"""
+        result = self.ai.clear_conversation_history()
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        
+        response = {"status": "success", "message": result}
         self.wfile.write(json.dumps(response).encode('utf-8'))
     
     def _handle_chat(self):
