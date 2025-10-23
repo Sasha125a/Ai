@@ -1759,177 +1759,381 @@ class SmartAI:
             'zip_files_analyzed': 0,
             'code_generated': 0
         }
+        
+        # Контекст и семантические паттерны
+        self.context = {
+            'last_intent': None,
+            'last_topic': None,
+            'mentioned_entities': [],
+            'conversation_flow': []
+        }
+        
+        # Семантические ядра для понимания смысла
+        self.semantic_cores = {
+            'programming': self._create_programming_semantic_core(),
+            'data_processing': self._create_data_semantic_core(),
+            'web_development': self._create_web_semantic_core(),
+            'system_administration': self._create_system_semantic_core(),
+            'learning': self._create_learning_semantic_core()
+        }
     
     def generate_smart_response(self, message):
-        """Основной метод генерации ответов - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
-        # Всегда сначала проверяем базовые интенты
-        message_lower = message.lower()
+        """Основной метод с интеллектуальным пониманием смысла"""
+        print(f"🧠 Анализирую смысл сообщения: '{message}'")
         
-        if any(word in message_lower for word in ['привет', 'здравствуй', 'hello', 'hi']):
-            return "Привет! 🖐️ Я AI-помощник с доступом к интернете. Задавайте любой вопрос - найду актуальную информацию! 🌐"
+        # Глубокий семантический анализ
+        semantic_analysis = self._deep_semantic_understanding(message)
+        print(f"🎯 Семантический анализ: {semantic_analysis}")
         
-        if any(word in message_lower for word in ['пока', 'до свидания', 'bye']):
-            return "До свидания! Возвращайтесь с новыми вопросами! 👋"
+        # Определение действия на основе понимания смысла
+        response = self._determine_action_based_on_meaning(message, semantic_analysis)
         
-        if any(word in message_lower for word in ['помощь', 'help', 'что ты умеешь']):
-            return self._get_help_response()
-
-        # 🔥 ВЫСШИЙ ПРИОРИТЕТ: Сначала проверяем запросы на генерацию кода
-        code_response = self._handle_code_generation_request(message)
-        if code_response:
-            print("💻 Обнаружен запрос на генерацию кода - высший приоритет")
-            self._update_stats("code_generation")
-            self._save_to_history(message, code_response, "code_generation", 0.9)
-            return code_response
-
-        print(f"🔍 Обрабатываю обычный запрос: '{message}'")
+        # Сохранение в историю
+        self._save_to_history(message, response, "semantic_understanding", 0.9)
         
-        # Получаем интенты и сущности для поиска
-        intents = self.learning_ai.classifier.predict(message)
-        entities = self.extract_entities(message)
-        primary_intent = intents[0] if intents else "unknown"
-        
-        # Пытаемся найти ответ через EnhancedLearningAI
-        response, confidence, source = self.learning_ai.find_best_response(
-            message, primary_intent, entities, use_web_search=True
-        )
-        
-        print(f"📊 Результат поиска: источник={source}, уверенность={confidence:.2f}")
-        
-        # Используем найденный ответ
-        if response:
-            self._update_stats(source)
-            self._save_to_history(message, response, source, confidence)
-            return response
-        
-        # Запасной вариант
-        fallback_response = "🤔 Я не совсем понял ваш вопрос. Попробуйте переформулировать или задать более конкретный вопрос."
-        self._save_to_history(message, fallback_response, "fallback", 0.1)
-        return fallback_response
+        return response
     
-    def _update_stats(self, source):
-        """Обновляет статистику"""
-        self.learning_stats['conversations_processed'] += 1
-        self.learning_stats['knowledge_base_entries'] = (
-            self.learning_ai.get_knowledge_stats()["total_entries"]
-        )
+    def _deep_semantic_understanding(self, message):
+        """Глубокое понимание смысла сообщения"""
+        words = self._intelligent_tokenize(message)
+        semantic_features = self._extract_semantic_features(words)
+        intent_clusters = self._cluster_intent_by_meaning(semantic_features)
         
-        if source == "web_search":
-            self.learning_stats['web_searches'] += 1
-            self.learning_stats['successful_searches'] += 1
-            print(f"✅ Найден ответ через веб-поиск")
-        elif source == "code_generation":
-            self.learning_stats['code_generated'] += 1
-            print(f"💻 Сгенерирован код")
+        analysis = {
+            'semantic_clusters': intent_clusters,
+            'primary_meaning': self._determine_primary_meaning(intent_clusters),
+            'action_type': self._infer_action_type(semantic_features),
+            'complexity_level': self._assess_complexity_level(words, semantic_features),
+            'domain': self._identify_domain(semantic_features),
+            'urgency': self._detect_urgency_by_context(words),
+            'expected_output_type': self._predict_expected_output(semantic_features)
+        }
+        
+        return analysis
+    
+    def _intelligent_tokenize(self, message):
+        """Интеллектуальная токенизация с пониманием контекста"""
+        # Разбиваем на слова, но с учетом программистских терминов
+        words = re.findall(r'[a-zA-Zа-яА-Я0-9_]+', message.lower())
+        
+        # Объединяем составные термины
+        combined_terms = []
+        i = 0
+        while i < len(words):
+            current_word = words[i]
+            
+            # Проверяем многословные термины (2-3 слова)
+            if i + 1 < len(words):
+                two_word_term = f"{current_word} {words[i+1]}"
+                if self._is_meaningful_term(two_word_term):
+                    combined_terms.append(two_word_term)
+                    i += 2
+                    continue
+            
+            if i + 2 < len(words):
+                three_word_term = f"{current_word} {words[i+1]} {words[i+2]}"
+                if self._is_meaningful_term(three_word_term):
+                    combined_terms.append(three_word_term)
+                    i += 3
+                    continue
+            
+            combined_terms.append(current_word)
+            i += 1
+        
+        return combined_terms
+    
+    def _is_meaningful_term(self, term):
+        """Определяет, является ли термин осмысленным"""
+        meaningful_patterns = [
+            'база данных', 'исходный код', 'веб приложение', 'мобильное приложение',
+            'искусственный интеллект', 'машинное обучение', 'графический интерфейс',
+            'пользовательский интерфейс', 'система управления', 'алгоритм сортировки',
+            'функция обработки', 'класс пользователя', 'структура данных'
+        ]
+        
+        return term in meaningful_patterns or any(pattern in term for pattern in ['приложение', 'система', 'алгоритм', 'функция', 'класс'])
+    
+    def _extract_semantic_features(self, words):
+        """Извлечение семантических特征 из слов"""
+        features = {
+            'has_creation_request': False,
+            'has_explanation_request': False,
+            'has_comparison_request': False,
+            'has_technical_term': False,
+            'has_programming_concept': False,
+            'has_data_operation': False,
+            'has_ui_mention': False,
+            'has_storage_mention': False,
+            'has_network_mention': False,
+            'has_algorithm_mention': False,
+            'word_patterns': []
+        }
+        
+        for word in words:
+            # Анализируем смысл через паттерны, а не словари
+            if self._implies_creation(word):
+                features['has_creation_request'] = True
+                features['word_patterns'].append('creation')
+            
+            if self._implies_explanation(word):
+                features['has_explanation_request'] = True
+                features['word_patterns'].append('explanation')
+            
+            if self._implies_comparison(word):
+                features['has_comparison_request'] = True
+                features['word_patterns'].append('comparison')
+            
+            if self._sounds_technical(word):
+                features['has_technical_term'] = True
+                features['word_patterns'].append('technical')
+            
+            if self._sounds_programming(word):
+                features['has_programming_concept'] = True
+                features['word_patterns'].append('programming')
+            
+            if self._implies_data_operation(word):
+                features['has_data_operation'] = True
+                features['word_patterns'].append('data_operation')
+            
+            if self._implies_ui(word):
+                features['has_ui_mention'] = True
+                features['word_patterns'].append('ui')
+            
+            if self._implies_storage(word):
+                features['has_storage_mention'] = True
+                features['word_patterns'].append('storage')
+            
+            if self._implies_network(word):
+                features['has_network_mention'] = True
+                features['word_patterns'].append('network')
+            
+            if self._implies_algorithm(word):
+                features['has_algorithm_mention'] = True
+                features['word_patterns'].append('algorithm')
+        
+        return features
+    
+    def _implies_creation(self, word):
+        """Определяет, подразумевает ли слово создание чего-либо"""
+        creation_patterns = ['создай', 'напиши', 'сделай', 'разработай', 'построй', 'сгенерируй', 
+                           'реализуй', 'сконструируй', 'составь', 'подготовь']
+        return any(pattern in word for pattern in creation_patterns)
+    
+    def _implies_explanation(self, word):
+        """Определяет, подразумевает ли слово объяснение"""
+        explanation_patterns = ['объясни', 'расскажи', 'поясни', 'растолкуй', 'покажи', 
+                              'продемонстрируй', 'иллюстрируй', 'разъясни']
+        return any(pattern in word for pattern in explanation_patterns)
+    
+    def _implies_comparison(self, word):
+        """Определяет, подразумевает ли слово сравнение"""
+        comparison_patterns = ['сравни', 'отличие', 'разница', 'лучше', 'хуже', 'против', 
+                             'versus', 'отличается', 'различается']
+        return any(pattern in word for pattern in comparison_patterns)
+    
+    def _sounds_technical(self, word):
+        """Определяет, звучит ли слово как технический термин"""
+        # Анализ по структуре слова
+        technical_indicators = [
+            len(word) > 6,  # Длинные слова часто технические
+            '-' in word or '_' in word,  # Дефисы и подчеркивания
+            word.endswith(('ция', 'изм', 'тор', 'ер', 'изатор')),  # Технические суффиксы
+            any(char.isdigit() for char in word),  # Содержит цифры
+            word.isupper() and len(word) > 2  # Аббревиатуры
+        ]
+        return any(technical_indicators)
+    
+    def _sounds_programming(self, word):
+        """Определяет, звучит ли слово как программистский термин"""
+        programming_indicators = [
+            word.endswith(('мент', 'тор', 'ция', 'изм')),  # Программистские суффиксы
+            'api' in word or 'sql' in word or 'html' in word,
+            word.startswith(('библиотека', 'фреймворк', 'модуль', 'пакет')),
+            any(pattern in word for pattern in ['код', 'программ', 'алгоритм', 'функц', 'класс'])
+        ]
+        return any(programming_indicators)
+    
+    def _implies_data_operation(self, word):
+        """Определяет, подразумевает ли слово операции с данными"""
+        data_patterns = ['данные', 'информация', 'обработка', 'анализ', 'фильтр', 'сортировка',
+                        'поиск', 'поисков', 'база', 'хранилище', 'коллекция', 'массив']
+        return any(pattern in word for pattern in data_patterns)
+    
+    def _implies_ui(self, word):
+        """Определяет, подразумевает ли слово пользовательский интерфейс"""
+        ui_patterns = ['интерфейс', 'кнопка', 'форма', 'окно', 'панель', 'меню', 'диалог',
+                      'графический', 'пользовательский', 'взаимодействие']
+        return any(pattern in word for pattern in ui_patterns)
+    
+    def _implies_storage(self, word):
+        """Определяет, подразумевает ли слово хранение данных"""
+        storage_patterns = ['хранить', 'сохранить', 'база', 'файл', 'память', 'кеш', 'буфер',
+                          'архив', 'репозиторий', 'коллекция']
+        return any(pattern in word for pattern in storage_patterns)
+    
+    def _implies_network(self, word):
+        """Определяет, подразумевает ли слово сетевые операции"""
+        network_patterns = ['сеть', 'интернет', 'запрос', 'ответ', 'сервер', 'клиент', 'протокол',
+                          'http', 'api', 'веб', 'браузер']
+        return any(pattern in word for pattern in network_patterns)
+    
+    def _implies_algorithm(self, word):
+        """Определяет, подразумевает ли слово алгоритмы"""
+        algorithm_patterns = ['алгоритм', 'сортировка', 'поиск', 'рекурсия', 'оптимизация',
+                            'эффективность', 'сложность', 'структура', 'дерево', 'граф']
+        return any(pattern in word for pattern in algorithm_patterns)
+    
+    def _cluster_intent_by_meaning(self, semantic_features):
+        """Кластеризация намерений по смыслу"""
+        clusters = []
+        
+        if semantic_features['has_creation_request']:
+            if semantic_features['has_programming_concept']:
+                clusters.append('code_creation')
+            elif semantic_features['has_technical_term']:
+                clusters.append('technical_creation')
+            else:
+                clusters.append('general_creation')
+        
+        if semantic_features['has_explanation_request']:
+            if semantic_features['has_technical_term']:
+                clusters.append('technical_explanation')
+            else:
+                clusters.append('general_explanation')
+        
+        if semantic_features['has_data_operation']:
+            clusters.append('data_processing')
+        
+        if semantic_features['has_ui_mention']:
+            clusters.append('ui_development')
+        
+        if semantic_features['has_storage_mention']:
+            clusters.append('data_storage')
+        
+        if semantic_features['has_network_mention']:
+            clusters.append('network_operations')
+        
+        if semantic_features['has_algorithm_mention']:
+            clusters.append('algorithm_implementation')
+        
+        return clusters if clusters else ['general_query']
+    
+    def _determine_primary_meaning(self, clusters):
+        """Определение основного смысла"""
+        priority_order = [
+            'code_creation', 'technical_creation', 'algorithm_implementation',
+            'technical_explanation', 'data_processing', 'ui_development',
+            'network_operations', 'data_storage', 'general_creation', 'general_explanation'
+        ]
+        
+        for intent in priority_order:
+            if intent in clusters:
+                return intent
+        
+        return 'general_query'
+    
+    def _infer_action_type(self, semantic_features):
+        """Вывод типа действия на основе семантических特征"""
+        if semantic_features['has_creation_request']:
+            return 'generate'
+        elif semantic_features['has_explanation_request']:
+            return 'explain'
+        elif semantic_features['has_comparison_request']:
+            return 'compare'
+        elif semantic_features['has_technical_term']:
+            return 'technical_help'
         else:
-            print(f"💡 Ответ из базы знаний")
+            return 'inform'
     
-    def _save_to_history(self, message, response, source, confidence):
-        """Сохраняет в историю"""
-        self.conversation_history.append({
-            'message': message,
-            'response': response,
-            'source': source,
-            'confidence': confidence,
-            'timestamp': datetime.now()
-        })
+    def _assess_complexity_level(self, words, semantic_features):
+        """Оценка уровня сложности запроса"""
+        complexity_indicators = sum([
+            len([w for w in words if len(w) > 8]),  # Длинные слова
+            semantic_features['has_technical_term'],
+            semantic_features['has_programming_concept'],
+            semantic_features['has_algorithm_mention'],
+            len(semantic_features['word_patterns']) > 3
+        ])
         
-        # Ограничиваем историю
-        if len(self.conversation_history) > 50:
-            self.conversation_history = self.conversation_history[-20:]
+        if complexity_indicators >= 4:
+            return 'high'
+        elif complexity_indicators >= 2:
+            return 'medium'
+        else:
+            return 'low'
     
-    def _get_help_response(self):
-        """Возвращает сообщение помощи"""
-        return """🦾 **Мои возможности:**
-
-• 🔍 **Поиск в интернете** - отвечаю на любые вопросы
-• 💻 **Генерация кода** - Python, JavaScript, Java, C++, C#, C и другие языки
-• 📚 **Объяснения** - сложные концепции простыми словами
-• 🎯 **Факты** - актуальная информация из сети
-• 📦 **Анализ ZIP-архивов** - структура и содержимое файлов
-
-**Поддерживаемые языки программирования:**
-Python, JavaScript, Java, C, C++, C#, PHP, Ruby, Go, Rust, HTML, CSS, SQL
-
-**Примеры запросов для генерации кода:**
-• "Напиши код калькулятора на Python"
-• "Сгенерируй класс на Java для работы с пользователями"
-• "Покажи пример работы с файлами на C++"
-• "Создай функцию сортировки на JavaScript"
-• "Напиши программу для парсинга HTML на Python"
-
-Просто спросите о чем угодно! 💫"""
-    
-    def _handle_code_generation_request(self, message):
-        """Обрабатывает запросы на генерацию кода - РАСШИРЕННАЯ ВЕРСИЯ ДЛЯ ПРИЛОЖЕНИЙ"""
-        message_lower = message.lower()
-    
-        # Расширенные ключевые слова для генерации кода
-        code_keywords = [
-            'напиши код', 'сгенерируй код', 'пример кода', 'код для',
-            'реализуй', 'создай программу', 'функция', 'класс',
-            'напиши программу', 'создай код', 'покажи код',
-            'как написать', 'пример программы', 'исходный код',
-            'алгоритм', 'скрипт', 'утилита', 'приложение',
-            'сделай код', 'продемонстрируй код', 'выведи код',
-            'разработай', 'создай приложение', 'напиши приложение',
-            'веб-приложение', 'сайт', 'web app', 'application'
-        ]
-    
-        # Языки программирования
-        programming_languages = [
-            'python', 'javascript', 'java', 'c++', 'c#', 'c ', 'php', 'ruby', 'go', 'rust',
-            'питон', 'джаваскрипт', 'джава', 'си плюс', 'си шарп', 'си ', 'пхп', 'руби',
-            'html', 'css', 'sql', 'typescript', 'react', 'vue', 'angular', 'django', 'flask'
-        ]
-    
-        # Ключевые слова для описания приложений
-        app_description_keywords = [
-            'приложение', 'сайт', 'программа', 'утилита', 'сервис',
-            'система', 'модуль', 'компонент', 'функционал', 'возможност',
-            'характеристик', 'описание', 'который', 'должен', 'уметь',
-            'может', 'поддерживает', 'включает', 'содержит'
-        ]
-    
-        # Проверяем, является ли запрос запросом на генерацию кода
-        has_code_request = any(keyword in message_lower for keyword in code_keywords)
-        has_language_mention = any(lang in message_lower for lang in programming_languages)
-        has_app_description = any(keyword in message_lower for keyword in app_description_keywords)
-    
-        # Дополнительные проверки для уверенности
-        code_indicators = [
-            'код', 'функц', 'класс', 'алгоритм', 'программ', 'скрипт',
-            'сортировк', 'поиск', 'калькулятор', 'база данных',
-            'переменн', 'цикл', 'массив', 'список', 'словарь',
-            'объект', 'метод', 'интерфейс', 'наследование'
-        ]
-    
-        has_code_indicator = any(indicator in message_lower for indicator in code_indicators)
-    
-        print(f"🔍 Анализ запроса на код: has_code_request={has_code_request}, has_language_mention={has_language_mention}, has_app_description={has_app_description}")
-    
-        # Генерируем код если есть явные признаки ИЛИ есть описание приложения
-        if (has_code_request and has_code_indicator) or (has_language_mention and has_app_description):
-            print(f"💻 Обнаружен запрос на генерацию кода: {message}")
+    def _identify_domain(self, semantic_features):
+        """Идентификация домена запроса"""
+        domains = []
         
-            # Определяем язык программирования
-            language = self._detect_programming_language(message)
-            print(f"🎯 Определен язык: {language}")
+        if semantic_features['has_programming_concept']:
+            domains.append('programming')
+        if semantic_features['has_data_operation']:
+            domains.append('data_science')
+        if semantic_features['has_ui_mention']:
+            domains.append('web_development')
+        if semantic_features['has_network_mention']:
+            domains.append('networking')
+        if semantic_features['has_algorithm_mention']:
+            domains.append('algorithms')
         
-            # Анализируем описание приложения
-            app_description = self._extract_app_description(message, language)
-            print(f"📝 Анализ описания приложения: {app_description}")
+        return domains[0] if domains else 'general'
+    
+    def _detect_urgency_by_context(self, words):
+        """Обнаружение срочности по контексту"""
+        urgency_indicators = ['срочно', 'быстро', 'немедленно', 'скорее', 'пожалуйста быстрее',
+                            'очень нужно', 'горю', 'горящий', 'приоритетный']
         
-            # Генерируем код
-            try:
-                # Если есть подробное описание приложения, используем улучшенную генерацию
-                if app_description and len(app_description) > 50:
-                    generated_code = self._generate_app_code(message, language, app_description)
-                else:
-                    generated_code = self.code_generator.generate_code(message, language)
-                
-                if generated_code and not generated_code.startswith("❌"):
-                    response = f"""💻 **Сгенерированный код на {language.upper()}:**
+        return 'high' if any(indicator in ' '.join(words) for indicator in urgency_indicators) else 'normal'
+    
+    def _predict_expected_output(self, semantic_features):
+        """Предсказание ожидаемого типа вывода"""
+        if semantic_features['has_creation_request'] and semantic_features['has_programming_concept']:
+            return 'code'
+        elif semantic_features['has_explanation_request']:
+            return 'explanation'
+        elif semantic_features['has_technical_term']:
+            return 'technical_details'
+        else:
+            return 'information'
+    
+    def _determine_action_based_on_meaning(self, message, semantic_analysis):
+        """Определение действия на основе понимания смысла"""
+        primary_meaning = semantic_analysis['primary_meaning']
+        action_type = semantic_analysis['action_type']
+        expected_output = semantic_analysis['expected_output_type']
+        
+        print(f"🎯 Основной смысл: {primary_meaning}")
+        print(f"🎯 Тип действия: {action_type}")
+        print(f"🎯 Ожидаемый вывод: {expected_output}")
+        
+        if expected_output == 'code' or primary_meaning in ['code_creation', 'technical_creation']:
+            print("💻 Понимаю, что нужно сгенерировать код")
+            return self._generate_intelligent_code(message, semantic_analysis)
+        
+        elif expected_output == 'explanation' or primary_meaning in ['technical_explanation']:
+            print("📚 Понимаю, что нужно объяснить")
+            return self._provide_intelligent_explanation(message, semantic_analysis)
+        
+        elif action_type == 'compare':
+            print("⚖️ Понимаю, что нужно сравнить")
+            return self._provide_comparison(message, semantic_analysis)
+        
+        else:
+            print("🔍 Понимаю, что нужна информация - ищу в интернете")
+            return self._find_information_online(message, semantic_analysis)
+    
+    def _generate_intelligent_code(self, message, semantic_analysis):
+        """Интеллектуальная генерация кода на основе понимания смысла"""
+        # Определяем язык программирования из контекста
+        language = self._infer_programming_language_from_context(message)
+        
+        # Генерируем код с учетом семантического анализа
+        try:
+            generated_code = self.code_generator.generate_code(message, language)
+            
+            if generated_code and not generated_code.startswith("❌"):
+                response = f"""💻 **Я понял, что вам нужен код! Сгенерировал на {language.upper()}:**
 
 ```{language}
 {generated_code}
