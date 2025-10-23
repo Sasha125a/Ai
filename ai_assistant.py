@@ -1861,9 +1861,9 @@ Python, JavaScript, Java, C, C++, C#, PHP, Ruby, Go, Rust, HTML, CSS, SQL
 Просто спросите о чем угодно! 💫"""
     
     def _handle_code_generation_request(self, message):
-        """Обрабатывает запросы на генерацию кода - УЛУЧШЕННАЯ ВЕРСИЯ"""
+        """Обрабатывает запросы на генерацию кода - РАСШИРЕННАЯ ВЕРСИЯ ДЛЯ ПРИЛОЖЕНИЙ"""
         message_lower = message.lower()
-        
+    
         # Расширенные ключевые слова для генерации кода
         code_keywords = [
             'напиши код', 'сгенерируй код', 'пример кода', 'код для',
@@ -1871,22 +1871,31 @@ Python, JavaScript, Java, C, C++, C#, PHP, Ruby, Go, Rust, HTML, CSS, SQL
             'напиши программу', 'создай код', 'покажи код',
             'как написать', 'пример программы', 'исходный код',
             'алгоритм', 'скрипт', 'утилита', 'приложение',
-            'сделай код', 'продемонстрируй код', 'выведи код'
+            'сделай код', 'продемонстрируй код', 'выведи код',
+            'разработай', 'создай приложение', 'напиши приложение',
+            'веб-приложение', 'сайт', 'web app', 'application'
         ]
-        
+    
         # Языки программирования
         programming_languages = [
             'python', 'javascript', 'java', 'c++', 'c#', 'c ', 'php', 'ruby', 'go', 'rust',
             'питон', 'джаваскрипт', 'джава', 'си плюс', 'си шарп', 'си ', 'пхп', 'руби',
-            'html', 'css', 'sql', 'typescript'
+            'html', 'css', 'sql', 'typescript', 'react', 'vue', 'angular', 'django', 'flask'
         ]
-        
+    
+        # Ключевые слова для описания приложений
+        app_description_keywords = [
+            'приложение', 'сайт', 'программа', 'утилита', 'сервис',
+            'система', 'модуль', 'компонент', 'функционал', 'возможност',
+            'характеристик', 'описание', 'который', 'должен', 'уметь',
+            'может', 'поддерживает', 'включает', 'содержит'
+        ]
+    
         # Проверяем, является ли запрос запросом на генерацию кода
-        is_code_request = (
-            any(keyword in message_lower for keyword in code_keywords) or
-            any(lang in message_lower for lang in programming_languages)
-        )
-        
+        has_code_request = any(keyword in message_lower for keyword in code_keywords)
+        has_language_mention = any(lang in message_lower for lang in programming_languages)
+        has_app_description = any(keyword in message_lower for keyword in app_description_keywords)
+    
         # Дополнительные проверки для уверенности
         code_indicators = [
             'код', 'функц', 'класс', 'алгоритм', 'программ', 'скрипт',
@@ -1894,22 +1903,30 @@ Python, JavaScript, Java, C, C++, C#, PHP, Ruby, Go, Rust, HTML, CSS, SQL
             'переменн', 'цикл', 'массив', 'список', 'словарь',
             'объект', 'метод', 'интерфейс', 'наследование'
         ]
-        
+    
         has_code_indicator = any(indicator in message_lower for indicator in code_indicators)
-        
-        print(f"🔍 Анализ запроса на код: is_code_request={is_code_request}, has_code_indicator={has_code_indicator}")
-        
-        # Генерируем код если есть явные признаки
-        if is_code_request and has_code_indicator:
+    
+        print(f"🔍 Анализ запроса на код: has_code_request={has_code_request}, has_language_mention={has_language_mention}, has_app_description={has_app_description}")
+    
+        # Генерируем код если есть явные признаки ИЛИ есть описание приложения
+        if (has_code_request and has_code_indicator) or (has_language_mention and has_app_description):
             print(f"💻 Обнаружен запрос на генерацию кода: {message}")
-            
+        
             # Определяем язык программирования
             language = self._detect_programming_language(message)
             print(f"🎯 Определен язык: {language}")
-            
+        
+            # Анализируем описание приложения
+            app_description = self._extract_app_description(message, language)
+            print(f"📝 Анализ описания приложения: {app_description}")
+        
             # Генерируем код
             try:
-                generated_code = self.code_generator.generate_code(message, language)
+                # Если есть подробное описание приложения, используем улучшенную генерацию
+                if app_description and len(app_description) > 50:
+                    generated_code = self._generate_app_code(message, language, app_description)
+                else:
+                    generated_code = self.code_generator.generate_code(message, language)
                 
                 if generated_code and not generated_code.startswith("❌"):
                     response = f"""💻 **Сгенерированный код на {language.upper()}:**
