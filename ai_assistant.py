@@ -1569,66 +1569,46 @@ class EnhancedLearningAI:
     def __init__(self):
         self.knowledge_base = TextKnowledgeBase()
         self.classifier = SimpleClassifier()
-        self.web_search = AdvancedWebSearch()  # ← ЗДЕСЬ ЗАМЕНИТЕ!
+        self.web_search = AdvancedWebSearch()
         
         # Инициализация начальными знаниями
         self._initialize_with_basic_knowledge()
     
-    def _initialize_with_basic_knowledge(self):
-        """Инициализация базовыми знаниями"""
-        basic_knowledge = [
-            # Программирование
-            ("programming", "что такое python", 
-             "Python - это язык программирования высокого уровня с простым и понятным синтаксисом. Используется для веб-разработки, анализа данных, искусственного интеллекта и автоматизации.", 
-             "explanation", ["python", "язык", "программирование"]),
-            
-            ("programming", "как создать класс в python", 
-             "Для создания класса в Python используйте ключевое слово class:\n\n```python\nclass MyClass:\n    def __init__(self, name):\n        self.name = name\n    \n    def greet(self):\n        print(f'Привет, {self.name}!')\n```", 
-             "code_request", ["python", "класс", "ооп"]),
-            
-            # Приветствия
-            ("qa_pairs", "привет", 
-             "Привет! Я AI-помощник. Задавайте любые вопросы - найду ответы в интернете! 🤖", 
-             "greeting", ["приветствие"]),
-            
-            ("qa_pairs", "помощь", 
-             "Я могу:\n• 🔍 Искать информацию в интернете\n• 💻 Показывать примеры кода\n• 📚 Объяснять концепции\n• 🎯 Отвечать на любые вопросы\n\nПросто спросите о чем угодно! 💡", 
-             "help", ["помощь", "функции"]),
-        ]
-        
-        # Добавляем только если база пустая
-        if self.knowledge_base.get_statistics()["total_entries"] == 0:
-            print("📖 Инициализация базовыми знаниями...")
-            for category, question, answer, intent, tags in basic_knowledge:
-                self.knowledge_base.add_entry(category, question, answer, intent, tags)
-    
     def find_best_response(self, user_message, intent, entities, use_web_search=True):
         """Поиск лучшего ответа - ВСЕГДА используем веб-поиск если не нашли в базе"""
         
-        # Сначала быстрая проверка в локальной базе знаний
+        print(f"🔍 Поиск ответа для: '{user_message}'")
+        
+        # Шаг 1: Сначала быстрая проверка в локальной базе знаний
         search_results = self.knowledge_base.search(user_message, min_confidence=0.5)
         
         if search_results and search_results[0].get('similarity_score', 0) > 0.7:
             best_match = search_results[0]
             self.knowledge_base.update_entry_usage(best_match["id"], success=True)
             confidence = best_match.get("confidence", 1.0) * best_match.get("success_rate", 1.0)
+            print(f"✅ Найден ответ в базе знаний (схожесть: {best_match.get('similarity_score', 0):.2f})")
             return best_match["answer"], confidence, "knowledge_base"
         
-        # ВСЕГДА пытаемся найти ответ в интернете
-        print(f"🔍 Ищу в интернете: {user_message}")
+        print(f"❌ В базе знаний не найдено хороших совпадений")
+        
+        # Шаг 2: ВСЕГДА пытаемся найти ответ в интернете
+        print(f"🌐 Запускаю поиск в интернете...")
         web_answer, web_source = self._web_search_and_save(user_message, intent, entities)
         
-        if web_answer:
+        if web_answer and self._is_meaningful_web_answer(web_answer):
+            print(f"✅ Найден качественный ответ в интернете")
             return web_answer, 0.8, web_source
         
-        # Если даже интернет не помог, генерируем умный ответ
+        print(f"❌ В интернете не найдено качественных ответов")
+        
+        # Шаг 3: Если даже интернет не помог, генерируем умный ответ
         fallback_answer = self._generate_web_fallback_response(user_message, intent)
         return fallback_answer, 0.3, "generated"
     
     def _web_search_and_save(self, user_message, intent, entities):
         """Поиск в интернете и сохранение в базу знаний"""
         try:
-            print(f"🌐 Запускаю улучшенный поиск для: {user_message}")
+            print(f"🌐 Запускаю улучшенный поиск для: '{user_message}'")
             search_results = self.web_search.search_internet(user_message, max_results=3)
         
             if search_results:
@@ -1663,10 +1643,10 @@ class EnhancedLearningAI:
                     confidence=0.9
                 )
             
-                print(f"✅ Найден ответ в интернете для: {user_message[:50]}...")
+                print(f"✅ Найден ответ в интернете для: '{user_message[:50]}...'")
                 return full_answer, "web_search"
             else:
-                print(f"❌ Не найдено результатов для: {user_message}")
+                print(f"❌ Не найдено результатов для: '{user_message}'")
                 # Возвращаем информационный ответ
                 info_answer = (
                     f"**🔍 По запросу '{user_message}' не найдено точных совпадений.**\n\n"
@@ -1686,6 +1666,21 @@ class EnhancedLearningAI:
                 f"Попробуйте повторить запрос позже или задать другой вопрос."
             )
             return error_answer, "generated"
+    
+    def _is_meaningful_web_answer(self, answer):
+        """Проверяет, является ли веб-ответ содержательным"""
+        if not answer:
+            return False
+        
+        # Исключаем ответы с ошибками или отсутствием информации
+        meaningless_indicators = [
+            "не найдено точных совпадений",
+            "Произошла ошибка при поиске",
+            "Не удалось выполнить поиск",
+            "не удалось найти"
+        ]
+        
+        return not any(indicator in answer.lower() for indicator in meaningless_indicators)
     
     def _generate_web_fallback_response(self, user_message, intent):
         """Генерация ответа когда даже интернет не помог"""
