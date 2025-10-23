@@ -1895,6 +1895,7 @@ class AIHandler(BaseHTTPRequestHandler):
     ai = SmartAI()
     
     def do_GET(self):
+        """Обработка GET запросов"""
         if self.path == '/':
             self._serve_html()
         elif self.path == '/stats':
@@ -1907,17 +1908,18 @@ class AIHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Not Found")
     
     def do_POST(self):
+        """Обработка POST запросов - ДОБАВЛЕН /analyze-with-file"""
         if self.path == '/chat':
             self._handle_chat()
         elif self.path == '/clear-history':
             self._clear_history()
-        elif self.path == '/analyze-with-file':  # ДОБАВЛЯЕМ ENDPOINT
+        elif self.path == '/analyze-with-file':  # НОВЫЙ ENDPOINT ДЛЯ ФАЙЛОВ
             self._handle_analyze_with_file()
         else:
             self.send_error(404, "Not Found")
     
     def _handle_analyze_with_file(self):
-        """Обрабатывает запросы с прикрепленными файлами"""
+        """НОВЫЙ МЕТОД: Обработка запросов с прикрепленными файлами"""
         try:
             content_type = self.headers.get('Content-Type', '')
             if not content_type.startswith('multipart/form-data'):
@@ -1996,20 +1998,21 @@ class AIHandler(BaseHTTPRequestHandler):
                     # Удаляем временный файл
                     try:
                         os.remove(file_info['path'])
-                    except:
-                        pass
+                        print(f"🗑️ Удален временный файл: {file_info['filename']}")
+                    except Exception as e:
+                        print(f"⚠️ Не удалось удалить файл {file_info['filename']}: {e}")
             
             # Добавляем ответ на текстовый запрос
             if message:
                 if response_text:
                     response_text = f"**Ваш запрос:** {message}\n\n" + response_text
                 else:
-                    # Если нет файлов, используем обычный поиск
+                    # Если нет файлов, но есть сообщение - используем обычный поиск
                     chat_response = self.ai.generate_smart_response(message)
                     response_text = chat_response
             
             if not response_text:
-                response_text = "Получены файлы, но не удалось их обработать."
+                response_text = "📭 Получены файлы, но не удалось их обработать. Попробуйте еще раз."
             
             # Отправляем ответ
             self.send_response(200)
@@ -2034,69 +2037,8 @@ class AIHandler(BaseHTTPRequestHandler):
             size_bytes /= 1024.0
         return f"{size_bytes:.1f} TB"
     
-    def _handle_file_upload(self):
-        """Обрабатывает загрузку файлов"""
-        try:
-            content_type = self.headers.get('Content-Type', '')
-            if not content_type.startswith('multipart/form-data'):
-                self.send_error(400, "Invalid content type")
-                return
-            
-            boundary_match = re.search(r'boundary=(.*)$', content_type)
-            if not boundary_match:
-                self.send_error(400, "No boundary found")
-                return
-            
-            boundary = boundary_match.group(1).encode()
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            
-            parts = post_data.split(b'--' + boundary)
-            uploaded_files = []
-            
-            for part in parts:
-                if b'name="files"' in part and b'filename="' in part:
-                    filename_match = re.search(b'filename="([^"]+)"', part)
-                    if filename_match:
-                        filename = filename_match.group(1).decode('utf-8')
-                        
-                        # Извлекаем содержимое файла
-                        file_content = part.split(b'\r\n\r\n')[1].rsplit(b'\r\n', 1)[0]
-                        
-                        # Сохраняем файл
-                        temp_dir = "temp_uploads"
-                        os.makedirs(temp_dir, exist_ok=True)
-                        file_path = os.path.join(temp_dir, f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}")
-                        
-                        with open(file_path, 'wb') as f:
-                            f.write(file_content)
-                        
-                        uploaded_files.append({
-                            'filename': filename,
-                            'path': file_path,
-                            'size': len(file_content)
-                        })
-            
-            if uploaded_files:
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                
-                response = {
-                    "success": True,
-                    "files": uploaded_files,
-                    "message": f"Загружено {len(uploaded_files)} файл(ов)"
-                }
-                self.wfile.write(json.dumps(response).encode('utf-8'))
-            else:
-                self.send_error(400, "No files uploaded")
-                
-        except Exception as e:
-            print(f"❌ Ошибка загрузки файлов: {e}")
-            self.send_error(500, f"Upload error: {str(e)}")
-    
-    # Остальные методы остаются без изменений
     def _serve_html(self):
+        """Отдает HTML интерфейс чата - ОБНОВЛЕН ДЛЯ РАБОТЫ С ФАЙЛАМИ"""
         self.send_response(200)
         self.send_header('Content-type', 'text/html; charset=utf-8')
         self.end_headers()
@@ -2109,11 +2051,7 @@ class AIHandler(BaseHTTPRequestHandler):
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>AI Assistant</title>
             <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
+                * { margin: 0; padding: 0; box-sizing: border-box; }
                 
                 body {
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -2125,73 +2063,43 @@ class AIHandler(BaseHTTPRequestHandler):
                 }
                 
                 .chat-container {
-                    width: 100%;
-                    max-width: 800px;
-                    height: 90vh;
-                    background: white;
-                    border-radius: 20px;
+                    width: 100%; max-width: 800px; height: 90vh;
+                    background: white; border-radius: 20px;
                     box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-                    display: flex;
-                    flex-direction: column;
-                    overflow: hidden;
+                    display: flex; flex-direction: column; overflow: hidden;
                 }
                 
                 .chat-header {
                     background: linear-gradient(135deg, #2c3e50, #3498db);
-                    color: white;
-                    padding: 20px;
-                    text-align: center;
+                    color: white; padding: 20px; text-align: center;
                     position: relative;
                 }
                 
-                .chat-header h1 {
-                    font-size: 1.5em;
-                    margin-bottom: 5px;
-                }
-                
-                .chat-header p {
-                    opacity: 0.9;
-                    font-size: 0.9em;
-                }
+                .chat-header h1 { font-size: 1.5em; margin-bottom: 5px; }
+                .chat-header p { opacity: 0.9; font-size: 0.9em; }
                 
                 .header-buttons {
-                    position: absolute;
-                    right: 15px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    display: flex;
-                    gap: 10px;
+                    position: absolute; right: 15px; top: 50%;
+                    transform: translateY(-50%); display: flex; gap: 10px;
                 }
                 
                 .header-btn {
-                    background: rgba(255,255,255,0.2);
-                    color: white;
-                    border: none;
-                    padding: 8px 12px;
-                    border-radius: 15px;
-                    cursor: pointer;
-                    font-size: 0.8em;
-                    text-decoration: none;
+                    background: rgba(255,255,255,0.2); color: white;
+                    border: none; padding: 8px 12px; border-radius: 15px;
+                    cursor: pointer; font-size: 0.8em; text-decoration: none;
                     transition: background 0.3s;
                 }
                 
-                .header-btn:hover {
-                    background: rgba(255,255,255,0.3);
-                }
+                .header-btn:hover { background: rgba(255,255,255,0.3); }
                 
                 .chat-messages {
-                    flex: 1;
-                    padding: 20px;
-                    overflow-y: auto;
+                    flex: 1; padding: 20px; overflow-y: auto;
                     background: #f8f9fa;
                 }
                 
                 .message {
-                    margin: 10px 0;
-                    padding: 12px 16px;
-                    border-radius: 18px;
-                    max-width: 80%;
-                    line-height: 1.4;
+                    margin: 10px 0; padding: 12px 16px; border-radius: 18px;
+                    max-width: 80%; line-height: 1.4;
                     animation: fadeIn 0.3s ease;
                 }
                 
@@ -2202,198 +2110,120 @@ class AIHandler(BaseHTTPRequestHandler):
                 
                 .user-message {
                     background: linear-gradient(135deg, #007bff, #0056b3);
-                    color: white;
-                    margin-left: auto;
+                    color: white; margin-left: auto;
                     border-bottom-right-radius: 5px;
                 }
                 
                 .ai-message {
-                    background: white;
-                    color: #333;
-                    border: 2px solid #e9ecef;
-                    border-bottom-left-radius: 5px;
+                    background: white; color: #333;
+                    border: 2px solid #e9ecef; border-bottom-left-radius: 5px;
                     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
                 }
                 
                 .message-time {
-                    font-size: 0.7em;
-                    opacity: 0.7;
-                    margin-top: 5px;
-                    text-align: right;
+                    font-size: 0.7em; opacity: 0.7;
+                    margin-top: 5px; text-align: right;
                 }
                 
                 .chat-input-container {
-                    padding: 15px 20px;
-                    background: white;
+                    padding: 15px 20px; background: white;
                     border-top: 1px solid #e9ecef;
-                    display: flex;
-                    gap: 10px;
-                    align-items: flex-end;
+                    display: flex; gap: 10px; align-items: flex-end;
                 }
                 
                 .input-wrapper {
-                    flex: 1;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 8px;
+                    flex: 1; display: flex; flex-direction: column; gap: 8px;
                 }
                 
                 .chat-input {
-                    width: 100%;
-                    padding: 12px 16px;
-                    border: 2px solid #e9ecef;
-                    border-radius: 25px;
-                    font-size: 14px;
-                    outline: none;
-                    transition: border-color 0.3s;
-                    resize: none;
-                    min-height: 44px;
-                    max-height: 120px;
+                    width: 100%; padding: 12px 16px;
+                    border: 2px solid #e9ecef; border-radius: 25px;
+                    font-size: 14px; outline: none; transition: border-color 0.3s;
+                    resize: none; min-height: 44px; max-height: 120px;
                     font-family: inherit;
                 }
                 
-                .chat-input:focus {
-                    border-color: #3498db;
-                }
+                .chat-input:focus { border-color: #3498db; }
                 
                 .attached-files {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 8px;
-                    margin-top: 5px;
+                    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px;
                 }
                 
                 .file-tag {
-                    background: #e3f2fd;
-                    border: 1px solid #bbdefb;
-                    border-radius: 15px;
-                    padding: 4px 12px;
-                    font-size: 0.8em;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
+                    background: #e3f2fd; border: 1px solid #bbdefb;
+                    border-radius: 15px; padding: 4px 12px; font-size: 0.8em;
+                    display: flex; align-items: center; gap: 6px;
                 }
                 
                 .file-tag .remove-file {
-                    background: none;
-                    border: none;
-                    color: #f44336;
-                    cursor: pointer;
-                    font-size: 1.1em;
-                    padding: 0;
-                    width: 16px;
-                    height: 16px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
+                    background: none; border: none; color: #f44336;
+                    cursor: pointer; font-size: 1.1em; padding: 0;
+                    width: 16px; height: 16px;
+                    display: flex; align-items: center; justify-content: center;
                 }
                 
                 .file-actions {
-                    display: flex;
-                    gap: 8px;
-                    align-items: center;
+                    display: flex; gap: 8px; align-items: center;
                 }
                 
                 .attach-button {
-                    background: none;
-                    border: none;
-                    font-size: 1.5em;
-                    cursor: pointer;
-                    padding: 8px;
-                    border-radius: 50%;
-                    transition: background 0.3s;
-                    color: #666;
+                    background: none; border: none; font-size: 1.5em;
+                    cursor: pointer; padding: 8px; border-radius: 50%;
+                    transition: background 0.3s; color: #666;
                 }
                 
-                .attach-button:hover {
-                    background: #f5f5f5;
-                    color: #333;
-                }
+                .attach-button:hover { background: #f5f5f5; color: #333; }
                 
                 .send-button {
                     padding: 12px 24px;
                     background: linear-gradient(135deg, #e74c3c, #c0392b);
-                    color: white;
-                    border: none;
-                    border-radius: 25px;
-                    cursor: pointer;
-                    font-size: 14px;
-                    font-weight: 600;
-                    transition: transform 0.2s;
-                    min-width: 80px;
+                    color: white; border: none; border-radius: 25px;
+                    cursor: pointer; font-size: 14px; font-weight: 600;
+                    transition: transform 0.2s; min-width: 80px;
                 }
                 
-                .send-button:hover {
-                    transform: translateY(-1px);
-                }
-                
-                .send-button:active {
-                    transform: translateY(0);
-                }
-                
+                .send-button:hover { transform: translateY(-1px); }
+                .send-button:active { transform: translateY(0); }
                 .send-button:disabled {
-                    background: #bdc3c7;
-                    cursor: not-allowed;
-                    transform: none;
+                    background: #bdc3c7; cursor: not-allowed; transform: none;
                 }
                 
-                .file-input {
-                    display: none;
-                }
+                .file-input { display: none; }
                 
                 .typing-indicator {
-                    display: none;
-                    padding: 12px 16px;
-                    background: white;
-                    border: 2px solid #e9ecef;
-                    border-radius: 18px;
-                    border-bottom-left-radius: 5px;
-                    max-width: 80px;
-                    margin: 10px 0;
+                    display: none; padding: 12px 16px;
+                    background: white; border: 2px solid #e9ecef;
+                    border-radius: 18px; border-bottom-left-radius: 5px;
+                    max-width: 80px; margin: 10px 0;
                 }
                 
                 .typing-dots {
-                    display: flex;
-                    gap: 4px;
+                    display: flex; gap: 4px;
                 }
                 
                 .typing-dot {
-                    width: 8px;
-                    height: 8px;
-                    background: #999;
-                    border-radius: 50%;
-                    animation: typing 1.4s infinite;
+                    width: 8px; height: 8px; background: #999;
+                    border-radius: 50%; animation: typing 1.4s infinite;
                 }
                 
-                .typing-dot:nth-child(2) {
-                    animation-delay: 0.2s;
-                }
-                
-                .typing-dot:nth-child(3) {
-                    animation-delay: 0.4s;
-                }
+                .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+                .typing-dot:nth-child(3) { animation-delay: 0.4s; }
                 
                 @keyframes typing {
                     0%, 60%, 100% {
-                        transform: translateY(0);
-                        opacity: 0.4;
+                        transform: translateY(0); opacity: 0.4;
                     }
                     30% {
-                        transform: translateY(-5px);
-                        opacity: 1;
+                        transform: translateY(-5px); opacity: 1;
                     }
                 }
                 
                 .search-status {
                     background: linear-gradient(135deg, #ffd700, #ff8c00);
-                    color: white;
-                    padding: 10px 16px;
-                    border-radius: 18px;
-                    margin: 10px 0;
-                    max-width: 200px;
+                    color: white; padding: 10px 16px; border-radius: 18px;
+                    margin: 10px 0; max-width: 200px;
                     border-bottom-left-radius: 5px;
-                    animation: pulse 1.5s infinite;
-                    font-weight: bold;
+                    animation: pulse 1.5s infinite; font-weight: bold;
                 }
                 
                 @keyframes pulse {
@@ -2404,108 +2234,59 @@ class AIHandler(BaseHTTPRequestHandler):
                 
                 .file-message {
                     background: linear-gradient(135deg, #00b894, #00a085);
-                    color: white;
-                    padding: 15px;
-                    border-radius: 18px;
-                    margin: 10px 0;
-                    max-width: 80%;
-                    margin-left: auto;
+                    color: white; padding: 15px; border-radius: 18px;
+                    margin: 10px 0; max-width: 80%; margin-left: auto;
                     border-bottom-right-radius: 5px;
                 }
                 
                 .file-info {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
+                    display: flex; align-items: center; gap: 10px;
                 }
                 
-                .file-icon {
-                    font-size: 1.5em;
-                }
+                .file-icon { font-size: 1.5em; }
                 
-                .file-details {
-                    flex: 1;
-                }
+                .file-details { flex: 1; }
                 
                 .file-name {
-                    font-weight: bold;
-                    margin-bottom: 4px;
+                    font-weight: bold; margin-bottom: 4px;
                 }
                 
-                .file-size {
-                    font-size: 0.8em;
-                    opacity: 0.9;
-                }
+                .file-size { font-size: 0.8em; opacity: 0.9; }
                 
                 .code-block {
-                    background: #2c3e50;
-                    color: #ecf0f1;
-                    padding: 12px;
-                    border-radius: 8px;
-                    margin: 8px 0;
-                    font-family: 'Courier New', monospace;
-                    font-size: 0.9em;
-                    overflow-x: auto;
-                    border-left: 4px solid #e74c3c;
+                    background: #2c3e50; color: #ecf0f1; padding: 12px;
+                    border-radius: 8px; margin: 8px 0;
+                    font-family: 'Courier New', monospace; font-size: 0.9em;
+                    overflow-x: auto; border-left: 4px solid #e74c3c;
                 }
                 
                 .zip-analysis {
                     background: linear-gradient(135deg, #fd79a8, #e84393);
-                    color: white;
-                    padding: 15px;
-                    border-radius: 18px;
-                    margin: 10px 0;
-                    max-width: 90%;
+                    color: white; padding: 15px; border-radius: 18px;
+                    margin: 10px 0; max-width: 90%;
                 }
                 
-                /* Scrollbar styling */
-                .chat-messages::-webkit-scrollbar {
-                    width: 6px;
-                }
-                
+                .chat-messages::-webkit-scrollbar { width: 6px; }
                 .chat-messages::-webkit-scrollbar-track {
-                    background: #f1f1f1;
-                    border-radius: 3px;
+                    background: #f1f1f1; border-radius: 3px;
                 }
-                
                 .chat-messages::-webkit-scrollbar-thumb {
-                    background: #c1c1c1;
-                    border-radius: 3px;
+                    background: #c1c1c1; border-radius: 3px;
                 }
-                
                 .chat-messages::-webkit-scrollbar-thumb:hover {
                     background: #a8a8a8;
                 }
                 
-                /* Mobile responsiveness */
                 @media (max-width: 768px) {
-                    .chat-container {
-                        height: 100vh;
-                        border-radius: 0;
-                    }
-                    
-                    .message {
-                        max-width: 90%;
-                    }
-                    
-                    .chat-header {
-                        padding: 15px;
-                    }
-                    
-                    .chat-header h1 {
-                        font-size: 1.3em;
-                    }
-                    
+                    .chat-container { height: 100vh; border-radius: 0; }
+                    .message { max-width: 90%; }
+                    .chat-header { padding: 15px; }
+                    .chat-header h1 { font-size: 1.3em; }
                     .header-buttons {
-                        position: static;
-                        transform: none;
-                        justify-content: center;
-                        margin-top: 10px;
+                        position: static; transform: none;
+                        justify-content: center; margin-top: 10px;
                     }
-                    
-                    .chat-input-container {
-                        padding: 10px 15px;
-                    }
+                    .chat-input-container { padding: 10px 15px; }
                 }
             </style>
         </head>
@@ -2635,18 +2416,15 @@ class AIHandler(BaseHTTPRequestHandler):
                             textDiv.textContent = text;
                             messageDiv.appendChild(textDiv);
                         }
-                    } else if (messageType === 'zip-analysis') {
-                        messageDiv.className = 'zip-analysis';
-                        messageDiv.innerHTML = text;
                     } else {
                         messageDiv.className = isUser ? 'message user-message' : 'message ai-message';
                         
                         // Format text with code blocks
                         let formattedText = text;
                         if (text.includes('```')) {
-                            formattedText = text.replace(/```(\w+)?\n([\s\S]*?)```/g, '<div class="code-block">$2</div>');
+                            formattedText = text.replace(/```(\\w+)?\\n([\\s\\S]*?)```/g, '<div class="code-block">$2</div>');
                         }
-                        formattedText = formattedText.replace(/\n/g, '<br>');
+                        formattedText = formattedText.replace(/\\n/g, '<br>');
                         
                         const time = new Date().toLocaleTimeString('ru-RU', { 
                             hour: '2-digit', 
@@ -2676,7 +2454,7 @@ class AIHandler(BaseHTTPRequestHandler):
                     
                     function typeChar() {
                         if (i < text.length) {
-                            if (text[i] === '\n') {
+                            if (text[i] === '\\n') {
                                 element.innerHTML += '<br>';
                             } else {
                                 element.innerHTML += text[i];
@@ -2724,28 +2502,39 @@ class AIHandler(BaseHTTPRequestHandler):
                     
                     try {
                         let response;
+                        let endpoint;
+                        let options;
                         
                         if (files.length > 0) {
-                            // Отправка с файлами
+                            // ОТПРАВКА С ФАЙЛАМИ НА /analyze-with-file
                             const formData = new FormData();
                             formData.append('message', message);
                             files.forEach(file => {
                                 formData.append('files', file);
                             });
                             
-                            response = await fetch('/analyze-with-file', {
+                            endpoint = '/analyze-with-file';
+                            options = {
                                 method: 'POST',
                                 body: formData
-                            });
+                            };
                         } else {
-                            // Обычный запрос
-                            response = await fetch('/chat', {
+                            // ОБЫЧНЫЙ ЗАПРОС НА /chat
+                            endpoint = '/chat';
+                            options = {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
                                 },
                                 body: JSON.stringify({ message: message })
-                            });
+                            };
+                        }
+                        
+                        console.log(`Отправка запроса на ${endpoint}`);
+                        response = await fetch(endpoint, options);
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
                         }
                         
                         const data = await response.json();
@@ -2812,7 +2601,6 @@ class AIHandler(BaseHTTPRequestHandler):
         '''
         self.wfile.write(html.encode('utf-8'))
     
-    # Остальные методы остаются без изменений
     def _serve_stats(self):
         """Отдача статистики обучения"""
         stats = self.ai.get_learning_stats()
@@ -2856,7 +2644,7 @@ class AIHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(response).encode('utf-8'))
     
     def _handle_chat(self):
-        """Обрабатывает чат-запросы"""
+        """Обрабатывает обычные чат-запросы"""
         try:
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
