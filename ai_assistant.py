@@ -772,6 +772,8 @@ class ZipAnalyzer:
             shutil.rmtree(self.temp_dir)
             self.temp_dir = None
 
+
+
 class EnhancedLearningAI:
     """Улучшенная система обучения с веб-поиском как основным источником"""
     
@@ -936,16 +938,18 @@ class SmartAI:
         self.conversation_history = []
         self.learning_ai = EnhancedLearningAI()
         self.zip_analyzer = ZipAnalyzer()
+        self.code_generator = IntelligentCodeGenerator()
         self.learning_stats = {
             'conversations_processed': 0,
             'knowledge_base_entries': 0,
             'web_searches': 0,
             'successful_searches': 0,
-            'zip_files_analyzed': 0
+            'zip_files_analyzed': 0,
+            'code_generated': 0
         }
     
     def generate_smart_response(self, message):
-        """Основной метод генерации ответов - исправленная версия"""
+        """Основной метод генерации ответов"""
         # Всегда сначала проверяем базовые интенты
         message_lower = message.lower()
         
@@ -958,13 +962,18 @@ class SmartAI:
         if any(word in message_lower for word in ['помощь', 'help', 'что ты умеешь']):
             return self._get_help_response()
         
+        # Проверяем запросы на генерацию кода
+        code_response = self._handle_code_generation_request(message)
+        if code_response:
+            return code_response
+        
         # Проверяем запросы на анализ ZIP-файлов (только если явно упоминаются)
         if any(word in message_lower for word in ['zip', 'архив', 'структур', 'распакуй', 'проанализируй архив']):
             zip_response = self._handle_zip_analysis_request(message)
             if zip_response:
                 return zip_response
         
-        # ИСПРАВЛЕНИЕ: Используем обычный поиск для всех остальных запросов
+        # Обычный поиск для всех остальных запросов
         print(f"🔍 Обрабатываю запрос: {message}")
         
         intents = self.learning_ai.classifier.predict(message)
@@ -1009,167 +1018,49 @@ class SmartAI:
         return """🦾 **Мои возможности:**
 
 • 🔍 **Поиск в интернете** - отвечаю на любые вопросы
-• 💻 **Программирование** - код, алгоритмы, технологии  
+• 💻 **Генерация кода** - Python, JavaScript, Java, C++, C#, C и другие языки
 • 📚 **Объяснения** - сложные концепции простыми словами
 • 🎯 **Факты** - актуальная информация из сети
 • 📦 **Анализ ZIP-архивов** - структура и содержимое файлов
 
-**Как использовать:**
-• Просто задайте вопрос - я найду ответ в интернете!
-• Для анализа архивов: прикрепите ZIP-файл и напишите "проанализируй этот архив"
-• Можно одновременно отправлять файлы и текстовые запросы
+**Поддерживаемые языки программирования:**
+Python, JavaScript, Java, C, C++, C#, PHP, Ruby, Go, Rust
+
+**Примеры запросов:**
+• "Напиши калькулятор на Python"
+• "Сгенерируй класс на Java для работы с пользователями"
+• "Покажи пример работы с файлами на C++"
+• "Создай функцию сортировки на JavaScript"
 
 Просто спросите о чем угодно! 💫"""
     
-    def _handle_zip_analysis_request(self, message):
-        """Обрабатывает запросы на анализ ZIP-файлов"""
-        # Только информационное сообщение, если файл не прикреплен
-        return """📦 **Анализ ZIP-архивов**
-
-Я могу проанализировать ZIP-файл и показать:
-• 📁 Полную структуру папок и файлов
-• 📊 Статистику по типам файлов  
-• 🔍 Содержимое текстовых файлов
-• 💻 Анализ кода (Python, JS, Java и др.)
-
-**Как использовать:**
-1. Нажмите на скрепку 📎 рядом с полем ввода
-2. Выберите ZIP-файл для загрузки
-3. Напишите запрос (например, "проанализируй этот архив")
-4. Нажмите "Отправить"
-
-Я автоматически распаковываю архив и показываю подробный анализ!"""
-    
-    def analyze_uploaded_zip(self, zip_file_path):
-        """Анализирует загруженный ZIP-файл"""
-        try:
-            print(f"📦 Анализирую ZIP-файл: {zip_file_path}")
-            
-            # Анализируем структуру
-            analysis = self.zip_analyzer.analyze_zip(zip_file_path)
-            
-            if "error" in analysis:
-                return f"❌ Ошибка анализа: {analysis['error']}"
-            
-            # Формируем красивый отчет
-            report = self._format_zip_analysis_report(analysis)
-            
-            # Обновляем статистику
-            self.learning_stats['zip_files_analyzed'] += 1
-            
-            # Очищаем временные файлы
-            self.zip_analyzer.cleanup()
-            
-            return report
-            
-        except Exception as e:
-            self.zip_analyzer.cleanup()
-            return f"❌ Ошибка при анализе ZIP-файла: {str(e)}"
-    
-    def _format_zip_analysis_report(self, analysis):
-        """Форматирует отчет об анализе ZIP-файла"""
-        report = []
+    def _handle_code_generation_request(self, message):
+        """Обрабатывает запросы на генерацию кода"""
+        message_lower = message.lower()
         
-        # Заголовок
-        report.append(f"📦 **АНАЛИЗ АРХИВА: {analysis['filename']}**")
-        report.append("=" * 50)
+        code_keywords = [
+            'напиши код', 'сгенерируй код', 'покажи код', 'пример кода',
+            'код на', 'программ', 'функци', 'класс', 'алгоритм',
+            'создай программу', 'реализуй', 'разработай'
+        ]
         
-        # Основная статистика
-        report.append("\n📊 **ОСНОВНАЯ СТАТИСТИКА:**")
-        report.append(f"• 📁 Всего файлов: {analysis['file_count']}")
-        report.append(f"• 📂 Папок: {analysis['folder_count']}")
-        report.append(f"• 💾 Размер архива: {self._format_size(analysis['total_size'])}")
-        
-        # Типы файлов
-        if analysis['file_types']:
-            report.append("\n📄 **ТИПЫ ФАЙЛОВ:**")
-            for ext, count in analysis['file_types'].items():
-                report.append(f"• `{ext if ext else 'без расшир'}`: {count} файл(ов)")
-        
-        # Структура
-        report.append("\n📁 **СТРУКТУРА ПАПОК:**")
-        if analysis['structure']:
-            for line in analysis['structure']:
-                report.append(line)
-        else:
-            report.append("  (архив пуст)")
-        
-        # Анализ содержимого
-        content = analysis.get('content_analysis', {})
-        if any(content.values()):
-            report.append("\n🔍 **КАТЕГОРИИ ФАЙЛОВ:**")
+        if any(keyword in message_lower for keyword in code_keywords):
+            print(f"💻 Генерирую код для запроса: {message}")
             
-            if content['readme_files']:
-                report.append("\n📖 **README файлы:**")
-                for file in content['readme_files'][:3]:
-                    report.append(f"  • {file}")
+            # Определяем язык программирования
+            language = self._detect_programming_language(message)
             
-            if content['code_files']:
-                report.append("\n💻 **Файлы с кодом:**")
-                for file in content['code_files'][:5]:
-                    report.append(f"  • {file}")
+            # Генерируем код
+            try:
+                generated_code = self.code_generator.generate_code(message, language)
                 
-                # Показываем содержимое первого Python файла если есть
-                py_files = [f for f in content['code_files'] if f.endswith('.py')]
-                if py_files:
-                    first_py = py_files[0]
-                    full_path = os.path.join(self.zip_analyzer.temp_dir, first_py)
-                    content_lines = self.zip_analyzer.read_file_content(full_path, 10)
-                    
-                    report.append(f"\n**Содержимое {first_py} (первые 10 строк):**")
-                    report.append("```python")
-                    report.extend(content_lines)
-                    report.append("```")
-            
-            if content['config_files']:
-                report.append("\n⚙️ **Конфигурационные файлы:**")
-                for file in content['config_files'][:3]:
-                    report.append(f"  • {file}")
-        
-        report.append("\n" + "=" * 50)
-        report.append("✅ Анализ завершен!")
-        
-        return "\n".join(report)
-    
-    def _format_size(self, size_bytes):
-        """Форматирует размер в читаемый вид"""
-        for unit in ['B', 'KB', 'MB', 'GB']:
-            if size_bytes < 1024.0:
-                return f"{size_bytes:.1f} {unit}"
-            size_bytes /= 1024.0
-        return f"{size_bytes:.1f} TB"
-    
-    def extract_entities(self, message):
-        """Простое извлечение сущностей"""
-        return {'languages': [], 'concepts': []}
-    
-    def get_learning_stats(self):
-        """Получение статистики"""
-        total_searches = max(1, self.learning_stats['web_searches'])
-        success_rate = (self.learning_stats['successful_searches'] / total_searches) * 100
-        
-        return {
-            'total_conversations': self.learning_stats['conversations_processed'],
-            'knowledge_base_entries': self.learning_stats['knowledge_base_entries'],
-            'web_searches': self.learning_stats['web_searches'],
-            'successful_searches': self.learning_stats['successful_searches'],
-            'success_rate': round(success_rate, 1),
-            'conversation_history_length': len(self.conversation_history),
-            'zip_files_analyzed': self.learning_stats['zip_files_analyzed']
-        }
-    
-    def export_knowledge_base(self):
-        """Экспорт базы знаний"""
-        return self.learning_ai.export_knowledge()
-    
-    def get_conversation_history(self, limit=10):
-        """Получение истории разговоров"""
-        return self.conversation_history[-limit:] if self.conversation_history else []
-    
-    def clear_conversation_history(self):
-        """Очистка истории разговоров"""
-        self.conversation_history.clear()
-        return "История разговоров очищена"
+                # Обновляем статистику
+                self.learning_stats['code_generated'] += 1
+                
+                response = f"""💻 **Сгенерированный код на {language.upper()}:**
+
+```{language}
+{generated_code}"""
 
 class AIHandler(BaseHTTPRequestHandler):
     ai = SmartAI()
