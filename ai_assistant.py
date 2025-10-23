@@ -772,7 +772,796 @@ class ZipAnalyzer:
             shutil.rmtree(self.temp_dir)
             self.temp_dir = None
 
+class IntelligentCodeGenerator:
+    """Интеллектуальный генератор кода, который понимает правила языков"""
+    
+    def __init__(self):
+        self.language_rules = self._init_language_rules()
+        self.code_patterns = self._init_code_patterns()
+    
+    def _init_language_rules(self):
+        """Инициализация правил языков программирования"""
+        return {
+            'python': {
+                'extension': '.py',
+                'comment': '#',
+                'string_quotes': ['"', "'"],
+                'block_start': ':',
+                'indentation': 4,
+                'import_keyword': 'import',
+                'function_def': 'def',
+                'class_def': 'class',
+                'main_guard': 'if __name__ == "__main__":'
+            },
+            'javascript': {
+                'extension': '.js',
+                'comment': '//',
+                'string_quotes': ['"', "'", '`'],
+                'block_start': '{',
+                'block_end': '}',
+                'indentation': 2,
+                'import_keyword': 'import',
+                'function_def': 'function',
+                'class_def': 'class',
+                'variable_def': ['let', 'const', 'var']
+            },
+            'java': {
+                'extension': '.java',
+                'comment': '//',
+                'string_quotes': ['"'],
+                'block_start': '{',
+                'block_end': '}',
+                'indentation': 4,
+                'import_keyword': 'import',
+                'function_def': 'public static',
+                'class_def': 'public class',
+                'main_method': 'public static void main(String[] args)'
+            },
+            'c': {
+                'extension': '.c',
+                'comment': '//',
+                'string_quotes': ['"'],
+                'block_start': '{',
+                'block_end': '}',
+                'indentation': 4,
+                'include_keyword': '#include',
+                'function_def': '',
+                'main_function': 'int main()'
+            },
+            'cpp': {
+                'extension': '.cpp',
+                'comment': '//',
+                'string_quotes': ['"'],
+                'block_start': '{',
+                'block_end': '}',
+                'indentation': 4,
+                'include_keyword': '#include',
+                'function_def': '',
+                'class_def': 'class',
+                'main_function': 'int main()'
+            },
+            'csharp': {
+                'extension': '.cs',
+                'comment': '//',
+                'string_quotes': ['"'],
+                'block_start': '{',
+                'block_end': '}',
+                'indentation': 4,
+                'using_keyword': 'using',
+                'class_def': 'public class',
+                'namespace_def': 'namespace',
+                'main_method': 'static void Main(string[] args)'
+            }
+        }
+    
+    def _init_code_patterns(self):
+        """Инициализация паттернов кода"""
+        return {
+            'calculator': ['счет', 'калькулятор', 'вычисл', 'математ'],
+            'file_operation': ['файл', 'прочит', 'запис', 'сохран'],
+            'data_structure': ['список', 'массив', 'словарь', 'структур'],
+            'class_object': ['класс', 'объект', 'ооп', 'инкапсуляц'],
+            'web_request': ['запрос', 'http', 'api', 'веб'],
+            'algorithm': ['сортиров', 'поиск', 'алгоритм', 'рекурс']
+        }
+    
+    def generate_code(self, request, language='python'):
+        """Генерирует код на основе понимания запроса и правил языка"""
+        request_lower = request.lower()
+        language = language.lower()
+        
+        if language not in self.language_rules:
+            return f"❌ Язык {language} не поддерживается"
+        
+        rules = self.language_rules[language]
+        
+        # Анализируем тип запроса
+        code_type = self._analyze_request_type(request_lower)
+        
+        # Генерируем код в зависимости от типа
+        if code_type == 'calculator':
+            return self._generate_calculator(request, language, rules)
+        elif code_type == 'class_object':
+            return self._generate_class(request, language, rules)
+        elif code_type == 'file_operation':
+            return self._generate_file_operations(request, language, rules)
+        elif code_type == 'data_structure':
+            return self._generate_data_structure(request, language, rules)
+        elif code_type == 'algorithm':
+            return self._generate_algorithm(request, language, rules)
+        else:
+            return self._generate_general_code(request, language, rules)
+    
+    def _analyze_request_type(self, request):
+        """Анализирует тип запроса для генерации кода"""
+        for pattern_type, keywords in self.code_patterns.items():
+            if any(keyword in request for keyword in keywords):
+                return pattern_type
+        return 'general'
+    
+    def _generate_calculator(self, request, language, rules):
+        """Генерирует код калькулятора"""
+        if language == 'python':
+            return self._python_calculator(request, rules)
+        elif language == 'javascript':
+            return self._javascript_calculator(request, rules)
+        elif language == 'java':
+            return self._java_calculator(request, rules)
+        elif language == 'c':
+            return self._c_calculator(request, rules)
+        elif language == 'cpp':
+            return self._cpp_calculator(request, rules)
+        elif language == 'csharp':
+            return self._csharp_calculator(request, rules)
+    
+    def _generate_class(self, request, language, rules):
+        """Генерирует классы и объекты"""
+        if language == 'python':
+            return self._python_class(request, rules)
+        elif language == 'javascript':
+            return self._javascript_class(request, rules)
+        elif language == 'java':
+            return self._java_class(request, rules)
+        elif language == 'cpp':
+            return self._cpp_class(request, rules)
+        elif language == 'csharp':
+            return self._csharp_class(request, rules)
+    
+    def _generate_file_operations(self, request, language, rules):
+        """Генерирует операции с файлами"""
+        if language == 'python':
+            return self._python_file_ops(request, rules)
+        elif language == 'javascript':
+            return self._javascript_file_ops(request, rules)
+        elif language == 'java':
+            return self._java_file_ops(request, rules)
+        elif language == 'c':
+            return self._c_file_ops(request, rules)
+    
+    def _generate_data_structure(self, request, language, rules):
+        """Генерирует структуры данных"""
+        if language == 'python':
+            return self._python_data_structures(request, rules)
+        elif language == 'javascript':
+            return self._javascript_data_structures(request, rules)
+        elif language == 'java':
+            return self._java_data_structures(request, rules)
+        elif language == 'c':
+            return self._c_data_structures(request, rules)
+    
+    def _generate_algorithm(self, request, language, rules):
+        """Генерирует алгоритмы"""
+        if language == 'python':
+            return self._python_algorithms(request, rules)
+        elif language == 'javascript':
+            return self._javascript_algorithms(request, rules)
+        elif language == 'java':
+            return self._java_algorithms(request, rules)
+        elif language == 'c':
+            return self._c_algorithms(request, rules)
+    
+    def _generate_general_code(self, request, language, rules):
+        """Генерирует общий код на основе запроса"""
+        # Извлекаем сущности из запроса
+        entities = self._extract_entities(request)
+        
+        if language == 'python':
+            return self._python_general(request, entities, rules)
+        elif language == 'javascript':
+            return self._javascript_general(request, entities, rules)
+        elif language == 'java':
+            return self._java_general(request, entities, rules)
+        elif language == 'c':
+            return self._c_general(request, entities, rules)
+        elif language == 'cpp':
+            return self._cpp_general(request, entities, rules)
+        elif language == 'csharp':
+            return self._csharp_general(request, entities, rules)
+    
+    def _extract_entities(self, request):
+        """Извлекает сущности из запроса для генерации кода"""
+        entities = {
+            'variables': [],
+            'functions': [],
+            'classes': [],
+            'operations': []
+        }
+        
+        words = request.lower().split()
+        
+        # Ищем переменные (существительные)
+        for word in words:
+            if len(word) > 3 and word.isalpha():
+                if word.endswith(('ция', 'ние', 'ство')):
+                    entities['functions'].append(word)
+                elif word.endswith(('тор', 'ер', 'ль')):
+                    entities['classes'].append(word)
+                else:
+                    entities['variables'].append(word)
+        
+        # Ищем операции
+        operations = ['сложить', 'умнож', 'делить', 'сравнить', 'найти', 'создать']
+        for op in operations:
+            if op in request.lower():
+                entities['operations'].append(op)
+        
+        return entities
+    
+    # Python генераторы
+    def _python_calculator(self, request, rules):
+        code = []
+        code.append('""" Простой калькулятор на Python """')
+        code.append('')
+        
+        # Функции калькулятора
+        code.append('def сложить(a, b):')
+        code.append('    return a + b')
+        code.append('')
+        
+        code.append('def вычесть(a, b):')
+        code.append('    return a - b')
+        code.append('')
+        
+        code.append('def умножить(a, b):')
+        code.append('    return a * b')
+        code.append('')
+        
+        code.append('def разделить(a, b):')
+        code.append('    if b == 0:')
+        code.append('        raise ValueError("Деление на ноль!")')
+        code.append('    return a / b')
+        code.append('')
+        
+        # Основная логика
+        code.append('def main():')
+        code.append('    print("🧮 Калькулятор")')
+        code.append('    try:')
+        code.append('        a = float(input("Введите первое число: "))')
+        code.append('        b = float(input("Введите второе число: "))')
+        code.append('        операция = input("Выберите операцию (+, -, *, /): ")')
+        code.append('')
+        code.append('        if операция == "+":')
+        code.append('            результат = сложить(a, b)')
+        code.append('        elif операция == "-":')
+        code.append('            результат = вычесть(a, b)')
+        code.append('        elif операция == "*":')
+        code.append('            результат = умножить(a, b)')
+        code.append('        elif операция == "/":')
+        code.append('            результат = разделить(a, b)')
+        code.append('        else:')
+        code.append('            print("Неизвестная операция")')
+        code.append('            return')
+        code.append('')
+        code.append('        print(f"Результат: {результат}")')
+        code.append('    except ValueError as e:')
+        code.append('        print(f"Ошибка: {e}")')
+        code.append('')
+        
+        code.append(rules['main_guard'])
+        code.append('    main()')
+        
+        return '\n'.join(code)
+    
+    def _python_class(self, request, rules):
+        # Извлекаем название класса из запроса
+        class_name = "MyClass"
+        if 'класс' in request.lower():
+            words = request.split()
+            for i, word in enumerate(words):
+                if word.lower() == 'класс' and i + 1 < len(words):
+                    class_name = words[i + 1].capitalize()
+                    break
+        
+        code = []
+        code.append(f'class {class_name}:')
+        code.append('    def __init__(self, name, value=0):')
+        code.append('        self.name = name')
+        code.append('        self.value = value')
+        code.append('        self.created_at = __import__("datetime").datetime.now()')
+        code.append('')
+        
+        code.append('    def display_info(self):')
+        code.append('        print(f"Объект: {self.name}")')
+        code.append('        print(f"Значение: {self.value}")')
+        code.append('        print(f"Создан: {self.created_at}")')
+        code.append('')
+        
+        code.append('    def увеличить(self, amount=1):')
+        code.append('        self.value += amount')
+        code.append('        return self.value')
+        code.append('')
+        
+        code.append('    def уменьшить(self, amount=1):')
+        code.append('        self.value -= amount')
+        code.append('        return self.value')
+        code.append('')
+        
+        code.append('    def to_dict(self):')
+        code.append('        return {')
+        code.append('            "name": self.name,')
+        code.append('            "value": self.value,')
+        code.append('            "created_at": self.created_at.isoformat()')
+        code.append('        }')
+        code.append('')
+        
+        # Демонстрация использования
+        code.append('# Пример использования:')
+        code.append(f'obj = {class_name}("тестовый_объект", 10)')
+        code.append('obj.display_info()')
+        code.append('obj.увеличить(5)')
+        code.append('print(f"Новое значение: {obj.value}")')
+        code.append('print(f"Как словарь: {obj.to_dict()}")')
+        
+        return '\n'.join(code)
+    
+    def _python_file_ops(self, request, rules):
+        code = []
+        code.append('""" Работа с файлами в Python """')
+        code.append('import json')
+        code.append('import csv')
+        code.append('')
+        
+        code.append('def прочитать_файл(имя_файла):')
+        code.append('    """Читает содержимое текстового файла"""')
+        code.append('    try:')
+        code.append('        with open(имя_файла, "r", encoding="utf-8") as файл:')
+        code.append('            return файл.read()')
+        code.append('    except FileNotFoundError:')
+        code.append('        print(f"Файл {имя_файла} не найден")')
+        code.append('        return None')
+        code.append('')
+        
+        code.append('def записать_в_файл(имя_файла, содержимое):')
+        code.append('    """Записывает текст в файл"""')
+        code.append('    with open(имя_файла, "w", encoding="utf-8") as файл:')
+        code.append('        файл.write(содержимое)')
+        code.append('    print(f"Данные записаны в {имя_файла}")')
+        code.append('')
+        
+        code.append('def сохранить_как_json(данные, имя_файла):')
+        code.append('    """Сохраняет данные в JSON формате"""')
+        code.append('    with open(имя_файла, "w", encoding="utf-8") as файл:')
+        code.append('        json.dump(данные, файл, ensure_ascii=False, indent=2)')
+        code.append('    print(f"Данные сохранены в JSON: {имя_файла}")')
+        code.append('')
+        
+        code.append('def прочитать_json(имя_файла):')
+        code.append('    """Читает данные из JSON файла"""')
+        code.append('    try:')
+        code.append('        with open(имя_файла, "r", encoding="utf-8") as файл:')
+        code.append('            return json.load(файл)')
+        code.append('    except (FileNotFoundError, json.JSONDecodeError) as e:')
+        code.append('        print(f"Ошибка чтения JSON: {e}")')
+        code.append('        return None')
+        code.append('')
+        
+        # Пример использования
+        code.append('# Пример использования функций:')
+        code.append('if __name__ == "__main__":')
+        code.append('    # Запись в файл')
+        code.append('    записать_в_файл("пример.txt", "Привет, мир!")')
+        code.append('    ')
+        code.append('    # Чтение из файла')
+        code.append('    содержимое = прочитать_файл("пример.txt")')
+        code.append('    if содержимое:')
+        code.append('        print(f"Прочитано: {содержимое}")')
+        code.append('    ')
+        code.append('    # Работа с JSON')
+        code.append('    данные = {"имя": "Тест", "значение": 42, "список": [1, 2, 3]}')
+        code.append('    сохранить_как_json(данные, "данные.json")')
+        code.append('    ')
+        code.append('    прочитанные_данные = прочитать_json("данные.json")')
+        code.append('    if прочитанные_данные:')
+        code.append('        print(f"JSON данные: {прочитанные_данные}")')
+        
+        return '\n'.join(code)
+    
+    # C генераторы
+    def _c_calculator(self, request, rules):
+        code = []
+        code.append('#include <stdio.h>')
+        code.append('#include <stdlib.h>')
+        code.append('')
+        
+        code.append('// Функции калькулятора')
+        code.append('float сложить(float a, float b) {')
+        code.append('    return a + b;')
+        code.append('}')
+        code.append('')
+        
+        code.append('float вычесть(float a, float b) {')
+        code.append('    return a - b;')
+        code.append('}')
+        code.append('')
+        
+        code.append('float умножить(float a, float b) {')
+        code.append('    return a * b;')
+        code.append('}')
+        code.append('')
+        
+        code.append('float разделить(float a, float b) {')
+        code.append('    if (b == 0) {')
+        code.append('        printf("Ошибка: деление на ноль!\\n");')
+        code.append('        exit(1);')
+        code.append('    }')
+        code.append('    return a / b;')
+        code.append('}')
+        code.append('')
+        
+        code.append('int main() {')
+        code.append('    float a, b, результат;')
+        code.append('    char операция;')
+        code.append('    ')
+        code.append('    printf("🧮 Калькулятор на C\\n");')
+        code.append('    printf("Введите первое число: ");')
+        code.append('    scanf("%f", &a);')
+        code.append('    printf("Введите второе число: ");')
+        code.append('    scanf("%f", &b);')
+        code.append('    printf("Выберите операцию (+, -, *, /): ");')
+        code.append('    scanf(" %c", &операция);')
+        code.append('    ')
+        code.append('    switch (операция) {')
+        code.append('        case "+":')
+        code.append('            результат = сложить(a, b);')
+        code.append('            break;')
+        code.append('        case "-":')
+        code.append('            результат = вычесть(a, b);')
+        code.append('            break;')
+        code.append('        case "*":')
+        code.append('            результат = умножить(a, b);')
+        code.append('            break;')
+        code.append('        case "/":')
+        code.append('            результат = разделить(a, b);')
+        code.append('            break;')
+        code.append('        default:')
+        code.append('            printf("Неизвестная операция\\n");')
+        code.append('            return 1;')
+        code.append('    }')
+        code.append('    ')
+        code.append('    printf("Результат: %.2f\\n", результат);')
+        code.append('    return 0;')
+        code.append('}')
+        
+        return '\n'.join(code)
+    
+    def _c_file_ops(self, request, rules):
+        code = []
+        code.append('#include <stdio.h>')
+        code.append('#include <stdlib.h>')
+        code.append('')
+        
+        code.append('// Функция для записи в файл')
+        code.append('void записать_в_файл(const char* имя_файла, const char* содержимое) {')
+        code.append('    FILE* файл = fopen(имя_файла, "w");')
+        code.append('    if (файл == NULL) {')
+        code.append('        printf("Ошибка открытия файла для записи\\n");')
+        code.append('        return;')
+        code.append('    }')
+        code.append('    fprintf(файл, "%s", содержимое);')
+        code.append('    fclose(файл);')
+        code.append('    printf("Данные записаны в %s\\n", имя_файла);')
+        code.append('}')
+        code.append('')
+        
+        code.append('// Функция для чтения из файла')
+        code.append('void прочитать_файл(const char* имя_файла) {')
+        code.append('    FILE* файл = fopen(имя_файла, "r");')
+        code.append('    if (файл == NULL) {')
+        code.append('        printf("Файл %s не найден\\n", имя_файла);')
+        code.append('        return;')
+        code.append('    }')
+        code.append('    ')
+        code.append('    char строка[256];')
+        code.append('    printf("Содержимое файла %s:\\n", имя_файла);')
+        code.append('    while (fgets(строка, sizeof(строка), файл)) {')
+        code.append('        printf("%s", строка);')
+        code.append('    }')
+        code.append('    fclose(файл);')
+        code.append('}')
+        code.append('')
+        
+        code.append('int main() {')
+        code.append('    // Запись в файл')
+        code.append('    записать_в_файл("пример.txt", "Привет, мир из C!\\nЭто тестовый файл.\\n");')
+        code.append('    ')
+        code.append('    // Чтение из файла')
+        code.append('    прочитать_файл("пример.txt");')
+        code.append('    ')
+        code.append('    return 0;')
+        code.append('}')
+        
+        return '\n'.join(code)
+    
+    # C++ генераторы
+    def _cpp_class(self, request, rules):
+        class_name = "MyClass"
+        if 'класс' in request.lower():
+            words = request.split()
+            for i, word in enumerate(words):
+                if word.lower() == 'класс' and i + 1 < len(words):
+                    class_name = words[i + 1]
+                    break
+        
+        code = []
+        code.append('#include <iostream>')
+        code.append('#include <string>')
+        code.append('#include <chrono>')
+        code.append('#include <ctime>')
+        code.append('')
+        
+        code.append(f'class {class_name} {{')
+        code.append('private:')
+        code.append('    std::string name;')
+        code.append('    int value;')
+        code.append('    std::time_t created_at;')
+        code.append('')
+        code.append('public:')
+        code.append(f'    // Конструктор класса {class_name}')
+        code.append('    ' + class_name + '(const std::string& name, int value = 0)')
+        code.append('        : name(name), value(value) {')
+        code.append('        created_at = std::time(nullptr);')
+        code.append('    }')
+        code.append('')
+        code.append('    // Метод для отображения информации')
+        code.append('    void displayInfo() const {')
+        code.append('        std::cout << "Объект: " << name << std::endl;')
+        code.append('        std::cout << "Значение: " << value << std::endl;')
+        code.append('        std::cout << "Создан: " << std::ctime(&created_at);')
+        code.append('    }')
+        code.append('')
+        code.append('    // Геттеры и сеттеры')
+        code.append('    std::string getName() const { return name; }')
+        code.append('    int getValue() const { return value; }')
+        code.append('    ')
+        code.append('    void setValue(int newValue) { value = newValue; }')
+        code.append('    ')
+        code.append('    // Методы для изменения значения')
+        code.append('    void увеличить(int amount = 1) { value += amount; }')
+        code.append('    void уменьшить(int amount = 1) { value -= amount; }')
+        code.append('};')
+        code.append('')
+        
+        code.append('int main() {')
+        code.append(f'    // Создание объекта класса {class_name}')
+        code.append(f'    {class_name} obj("тестовый_объект", 10);')
+        code.append('    ')
+        code.append('    // Использование методов')
+        code.append('    obj.displayInfo();')
+        code.append('    obj.увеличить(5);')
+        code.append('    std::cout << "Новое значение: " << obj.getValue() << std::endl;')
+        code.append('    ')
+        code.append('    return 0;')
+        code.append('}')
+        
+        return '\n'.join(code)
+    
+    # Java генераторы
+    def _java_calculator(self, request, rules):
+        code = []
+        code.append('import java.util.Scanner;')
+        code.append('')
+        code.append('public class Calculator {')
+        code.append('    ')
+        code.append('    // Методы калькулятора')
+        code.append('    public static double сложить(double a, double b) {')
+        code.append('        return a + b;')
+        code.append('    }')
+        code.append('    ')
+        code.append('    public static double вычесть(double a, double b) {')
+        code.append('        return a - b;')
+        code.append('    }')
+        code.append('    ')
+        code.append('    public static double умножить(double a, double b) {')
+        code.append('        return a * b;')
+        code.append('    }')
+        code.append('    ')
+        code.append('    public static double разделить(double a, double b) {')
+        code.append('        if (b == 0) {')
+        code.append('            throw new IllegalArgumentException("Деление на ноль!");')
+        code.append('        }')
+        code.append('        return a / b;')
+        code.append('    }')
+        code.append('    ')
+        code.append('    public static void main(String[] args) {')
+        code.append('        Scanner scanner = new Scanner(System.in);')
+        code.append('        System.out.println("🧮 Калькулятор на Java");')
+        code.append('        ')
+        code.append('        try {')
+        code.append('            System.out.print("Введите первое число: ");')
+        code.append('            double a = scanner.nextDouble();')
+        code.append('            ')
+        code.append('            System.out.print("Введите второе число: ");')
+        code.append('            double b = scanner.nextDouble();')
+        code.append('            ')
+        code.append('            System.out.print("Выберите операцию (+, -, *, /): ");')
+        code.append('            char операция = scanner.next().charAt(0);')
+        code.append('            ')
+        code.append('            double результат;')
+        code.append('            switch (операция) {')
+        code.append('                case "+":')
+        code.append('                    результат = сложить(a, b);')
+        code.append('                    break;')
+        code.append('                case "-":')
+        code.append('                    результат = вычесть(a, b);')
+        code.append('                    break;')
+        code.append('                case "*":')
+        code.append('                    результат = умножить(a, b);')
+        code.append('                    break;')
+        code.append('                case "/":')
+        code.append('                    результат = разделить(a, b);')
+        code.append('                    break;')
+        code.append('                default:')
+        code.append('                    System.out.println("Неизвестная операция");')
+        code.append('                    return;')
+        code.append('            }')
+        code.append('            ')
+        code.append('            System.out.printf("Результат: %.2f%n", результат);')
+        code.append('            ')
+        code.append('        } catch (Exception e) {')
+        code.append('            System.out.println("Ошибка: " + e.getMessage());')
+        code.append('        } finally {')
+        code.append('            scanner.close();')
+        code.append('        }')
+        code.append('    }')
+        code.append('}')
+        
+        return '\n'.join(code)
 
+    # JavaScript генераторы
+    def _javascript_calculator(self, request, rules):
+        code = []
+        code.append('// Калькулятор на JavaScript')
+        code.append('class Calculator {')
+        code.append('    constructor() {')
+        code.append('        this.history = [];')
+        code.append('    }')
+        code.append('')
+        code.append('    сложить(a, b) {')
+        code.append('        const результат = a + b;')
+        code.append('        this.history.push(`${a} + ${b} = ${результат}`);')
+        code.append('        return результат;')
+        code.append('    }')
+        code.append('')
+        code.append('    вычесть(a, b) {')
+        code.append('        const результат = a - b;')
+        code.append('        this.history.push(`${a} - ${b} = ${результат}`);')
+        code.append('        return результат;')
+        code.append('    }')
+        code.append('')
+        code.append('    умножить(a, b) {')
+        code.append('        const результат = a * b;')
+        code.append('        this.history.push(`${a} * ${b} = ${результат}`);')
+        code.append('        return результат;')
+        code.append('    }')
+        code.append('')
+        code.append('    разделить(a, b) {')
+        code.append('        if (b === 0) {')
+        code.append('            throw new Error("Деление на ноль!");')
+        code.append('        }')
+        code.append('        const результат = a / b;')
+        code.append('        this.history.push(`${a} / ${b} = ${результат}`);')
+        code.append('        return результат;')
+        code.append('    }')
+        code.append('')
+        code.append('    показатьИсторию() {')
+        code.append('        console.log("📋 История операций:");')
+        code.append('        this.history.forEach(операция => console.log(операция));')
+        code.append('    }')
+        code.append('}')
+        code.append('')
+        code.append('// Пример использования')
+        code.append('const калькулятор = new Calculator();')
+        code.append('')
+        code.append('try {')
+        code.append('    console.log("🧮 Калькулятор на JavaScript");')
+        code.append('    ')
+        code.append('    const a = parseFloat(prompt("Введите первое число:"));')
+        code.append('    const b = parseFloat(prompt("Введите второе число:"));')
+        code.append('    const операция = prompt("Выберите операцию (+, -, *, /):");')
+        code.append('    ')
+        code.append('    let результат;')
+        code.append('    switch (операция) {')
+        code.append('        case "+":')
+        code.append('            результат = калькулятор.сложить(a, b);')
+        code.append('            break;')
+        code.append('        case "-":')
+        code.append('            результат = калькулятор.вычесть(a, b);')
+        code.append('            break;')
+        code.append('        case "*":')
+        code.append('            результат = калькулятор.умножить(a, b);')
+        code.append('            break;')
+        code.append('        case "/":')
+        code.append('            результат = калькулятор.разделить(a, b);')
+        code.append('            break;')
+        code.append('        default:')
+        code.append('            console.log("Неизвестная операция");')
+        code.append('            break;')
+        code.append('    }')
+        code.append('    ')
+        code.append('    if (результат !== undefined) {')
+        code.append('        console.log(`Результат: ${результат}`);')
+        code.append('        калькулятор.показатьИсторию();')
+        code.append('    }')
+        code.append('    ')
+        code.append('} catch (error) {')
+        code.append('    console.log(`Ошибка: ${error.message}`);')
+        code.append('}')
+        
+        return '\n'.join(code)
+
+    # Общие генераторы для других языков
+    def _python_general(self, request, entities, rules):
+        """Генерирует общий Python код на основе запроса"""
+        code = []
+        code.append('""" Код сгенерирован AI на основе запроса """')
+        code.append('')
+        
+        # Создаем переменные если они есть в запросе
+        if entities['variables']:
+            for var in entities['variables'][:3]:  # Берем первые 3 переменные
+                code.append(f'{var} = None  # Инициализация переменной {var}')
+            code.append('')
+        
+        # Создаем функции если есть операции
+        if entities['operations']:
+            for op in entities['operations']:
+                if 'сложить' in op:
+                    code.append('def сложить(a, b):')
+                    code.append('    """Складывает два числа"""')
+                    code.append('    return a + b')
+                    code.append('')
+                elif 'умнож' in op:
+                    code.append('def умножить(a, b):')
+                    code.append('    """Умножает два числа"""')
+                    code.append('    return a * b')
+                    code.append('')
+                elif 'найти' in op:
+                    code.append('def найти_элемент(список, элемент):')
+                    code.append('    """Находит элемент в списке"""')
+                    code.append('    try:')
+                    code.append('        return список.index(элемент)')
+                    code.append('    except ValueError:')
+                    code.append('        return -1')
+                    code.append('')
+        
+        # Добавляем пример использования
+        code.append('# Пример использования сгенерированных функций:')
+        code.append('if __name__ == "__main__":')
+        code.append('    print("Запуск сгенерированной программы")')
+        code.append('    ')
+        
+        if any('сложить' in op for op in entities['operations']):
+            code.append('    # Пример сложения')
+            code.append('    результат_сложения = сложить(10, 5)')
+            code.append('    print(f"10 + 5 = {результат_сложения}")')
+            code.append('    ')
+        
+        if any('умнож' in op for op in entities['operations']):
+            code.append('    # Пример умножения')
+            code.append('    результат_умножения = умножить(4, 7)')
+            code.append('    print(f"4 * 7 = {результат_умножения}")')
+        
+        return '\n'.join(code)
 
 class EnhancedLearningAI:
     """Улучшенная система обучения с веб-поиском как основным источником"""
