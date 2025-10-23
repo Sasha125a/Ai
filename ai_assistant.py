@@ -2139,13 +2139,184 @@ class SmartAI:
 {generated_code}
     ```"""
             
+                self.learning_stats['code_generated'] += 1
                 return response
+            else:
+                return "❌ Понял, что вы хотите код, но не смог его сгенерировать. Попробуйте описать задачу более конкретно."
             
-            except Exception as e:
-                print(f"❌ Ошибка генерации кода: {e}")
-                return f"❌ Произошла ошибка при генерации кода: {str(e)}"
+        except Exception as e:
+            return f"❌ Ошибка при генерации кода: {str(e)}"
     
-        return None
+    def _infer_programming_language_from_context(self, message):
+        """Вывод языка программирования из контекста"""
+        # Анализируем сообщение на наличие hints о языке
+        message_lower = message.lower()
+    
+        # Ищем технические hints
+        if any(hint in message_lower for hint in ['веб', 'браузер', 'html', 'css']):
+            return 'javascript'
+        elif any(hint in message_lower for hint in ['данные', 'анализ', 'машинное обучение']):
+            return 'python'
+        elif any(hint in message_lower for hint in ['предприятие', 'корпоратив', 'андроид']):
+            return 'java'
+        elif any(hint in message_lower for hint in ['игра', 'производительность', 'низкоуровнев']):
+            return 'c++'
+        elif any(hint in message_lower for hint in ['микроsoft', 'windows', 'офис']):
+            return 'c#'
+        else:
+            return 'python'  # Язык по умолчанию
+
+    def _provide_intelligent_explanation(self, message, semantic_analysis):
+        """Интеллектуальное объяснение на основе понимания смысла"""
+        # Используем веб-поиск для нахождения объяснений
+        intents = self.learning_ai.classifier.predict(message)
+        entities = self.extract_entities(message)
+    
+        response, confidence, source = self.learning_ai.find_best_response(
+            message, intents[0] if intents else "explanation", entities, use_web_search=True
+        )
+        
+        if response:
+            enhanced_response = f"📚 **Я понял, что вам нужно объяснение!**\n\n{response}"
+            return enhanced_response
+        else:
+            return "🤔 Понял, что вы хотите объяснение, но не нашел подходящей информации. Попробуйте переформулировать вопрос."
+
+    def _provide_comparison(self, message, semantic_analysis):
+        """Предоставление сравнения на основе понимания смысла"""
+        return f"⚖️ **Я понял, что вам нужно сравнение!**\n\nПока ищу информацию для сравнения...\n\n*Попробуйте конкретизировать, что именно вы хотите сравнить*"
+
+    def _find_information_online(self, message, semantic_analysis):
+        """Поиск информации в интернете с пониманием контекста"""
+        intents = self.learning_ai.classifier.predict(message)
+        entities = self.extract_entities(message)
+    
+        response, confidence, source = self.learning_ai.find_best_response(
+            message, intents[0] if intents else "general", entities, use_web_search=True
+        )
+    
+        if response:
+            return f"🔍 **Я понял ваш запрос!**\n\n{response}"
+        else:
+            return "🤔 Понял ваш запрос, но не нашел точной информации. Можете уточнить?"
+
+    def _save_to_history(self, message, response, source, confidence):
+        """Сохранение в историю"""
+        self.conversation_history.append({
+            'message': message,
+            'response': response,
+            'source': source,
+            'confidence': confidence,
+            'timestamp': datetime.now(),
+            'semantic_analysis': getattr(self, '_last_analysis', {})
+        })
+    
+        if len(self.conversation_history) > 50:
+            self.conversation_history = self.conversation_history[-20:]
+
+    # Остальные методы остаются без изменений...
+    def extract_entities(self, message):
+        """Извлечение сущностей из сообщения"""
+        entities = {
+            'variables': [],
+            'functions': [],
+            'classes': [],
+            'operations': []
+        }
+    
+        words = message.lower().split()
+        for word in words:
+            if len(word) > 3 and word.isalpha():
+                entities['variables'].append(word)
+    
+        return entities
+
+    def analyze_uploaded_zip(self, file_path):
+        """Анализ загруженного ZIP-архива"""
+        try:
+            analysis = self.zip_analyzer.analyze_zip(file_path)
+            if "error" in analysis:
+                return f"❌ Ошибка анализа архива: {analysis['error']}"
+        
+            response = f"📦 **Анализ архива {analysis['filename']}:**\n"
+            response += f"• 📁 Файлов: {analysis['file_count']}\n"
+            response += f"• 📂 Папок: {analysis['folder_count']}\n"
+            response += f"• 📊 Размер: {self._format_size(analysis['total_size'])}\n\n"
+        
+            if analysis['structure']:
+                response += "**Структура:**\n```\n"
+                response += "\n".join(analysis['structure'][:15])
+                if len(analysis['structure']) > 15:
+                    response += "\n... (и другие файлы)"
+                response += "\n```"
+        
+            return response
+        except Exception as e:
+            return f"❌ Ошибка анализа ZIP: {str(e)}"
+    
+    def _format_size(self, size_bytes):
+        """Форматирует размер в читаемый вид"""
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} TB"
+
+    def get_learning_stats(self):
+        """Получение статистики обучения"""
+        stats = self.learning_stats.copy()
+        stats['conversation_history_count'] = len(self.conversation_history)
+        stats['knowledge_base_stats'] = self.learning_ai.get_knowledge_stats()
+        return stats
+
+    def get_conversation_history(self, limit=20):
+        """Получение истории разговоров"""
+        return self.conversation_history[-limit:]
+
+    def clear_conversation_history(self):
+        """Очистка истории разговоров"""
+        self.conversation_history = []
+        return "История очищена"
+
+    def export_knowledge_base(self):
+        """Экспорт базы знаний"""
+        return self.learning_ai.export_knowledge()
+
+    # Семантические ядра для различных доменов
+    def _create_programming_semantic_core(self):
+        return {
+            'creation_verbs': ['создай', 'напиши', 'реализуй', 'разработай', 'построй'],
+            'concept_nouns': ['функция', 'класс', 'алгоритм', 'модуль', 'библиотека'],
+            'operation_verbs': ['обработать', 'отсортировать', 'найти', 'сохранить', 'загрузить']
+        }
+
+    def _create_data_semantic_core(self):
+        return {
+            'data_terms': ['данные', 'информация', 'набор', 'коллекция', 'массив'],
+            'processing_verbs': ['анализировать', 'обработать', 'фильтровать', 'группировать'],
+            'storage_terms': ['хранить', 'сохранить', 'база', 'файл', 'архив']
+        }
+
+    def _create_web_semantic_core(self):
+        return {
+            'web_terms': ['веб', 'сайт', 'браузер', 'интернет', 'онлайн'],
+            'ui_terms': ['интерфейс', 'кнопка', 'форма', 'страница', 'дизайн'],
+            'interaction_verbs': ['отобразить', 'передать', 'отправить', 'получить']
+        }
+
+    def _create_system_semantic_core(self):
+        return {
+            'system_terms': ['система', 'сервер', 'клиент', 'сеть', 'протокол'],
+            'management_verbs': ['управлять', 'конфигурировать', 'мониторить', 'оптимизировать'],
+            'technical_terms': ['память', 'процессор', 'диск', 'оперативная']
+        }
+
+    def _create_learning_semantic_core(self):
+        return {
+            'learning_verbs': ['объясни', 'расскажи', 'покажи', 'научи', 'продемонстрируй'],
+            'knowledge_terms': ['знание', 'информация', 'факт', 'концепция', 'теория'],
+            'question_terms': ['как', 'почему', 'что', 'когда', 'где']
+        }
 
 class AIHandler(BaseHTTPRequestHandler):
     ai = SmartAI()
