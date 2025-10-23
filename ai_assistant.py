@@ -1911,21 +1911,20 @@ class AIHandler(BaseHTTPRequestHandler):
             self._handle_chat()
         elif self.path == '/clear-history':
             self._clear_history()
-        elif self.path == '/upload-file':
-            self._handle_file_upload()
-        elif self.path == '/analyze-with-file':  # ДОБАВЛЯЕМ ЭТОТ ENDPOINT
-            self._handle_analysis_with_file()
+        elif self.path == '/analyze-with-file':  # ДОБАВЛЯЕМ ENDPOINT
+            self._handle_analyze_with_file()
         else:
             self.send_error(404, "Not Found")
     
-    def _handle_analysis_with_file(self):
-        """Обрабатывает запросы с прикрепленными файлами - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    def _handle_analyze_with_file(self):
+        """Обрабатывает запросы с прикрепленными файлами"""
         try:
             content_type = self.headers.get('Content-Type', '')
             if not content_type.startswith('multipart/form-data'):
                 self.send_error(400, "Invalid content type")
                 return
             
+            # Получаем boundary из Content-Type
             boundary_match = re.search(r'boundary=(.*)$', content_type)
             if not boundary_match:
                 self.send_error(400, "No boundary found")
@@ -1935,71 +1934,84 @@ class AIHandler(BaseHTTPRequestHandler):
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             
+            # Разбираем multipart данные
             parts = post_data.split(b'--' + boundary)
             message = ""
             uploaded_files = []
             
             for part in parts:
+                # Ищем текстовое сообщение
                 if b'name="message"' in part:
-                    # Извлекаем текстовое сообщение
-                    message_content = part.split(b'\r\n\r\n')[1].rsplit(b'\r\n', 1)[0]
-                    message = message_content.decode('utf-8')
+                    try:
+                        message_content = part.split(b'\r\n\r\n')[1].rsplit(b'\r\n', 1)[0]
+                        message = message_content.decode('utf-8')
+                    except:
+                        message = ""
                 
+                # Ищем файлы
                 elif b'name="files"' in part and b'filename="' in part:
-                    filename_match = re.search(b'filename="([^"]+)"', part)
-                    if filename_match:
-                        filename = filename_match.group(1).decode('utf-8')
-                        
-                        # Извлекаем содержимое файла
-                        file_content = part.split(b'\r\n\r\n')[1].rsplit(b'\r\n', 1)[0]
-                        
-                        # Сохраняем файл
-                        temp_dir = "temp_uploads"
-                        os.makedirs(temp_dir, exist_ok=True)
-                        file_path = os.path.join(temp_dir, f"chat_upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}")
-                        
-                        with open(file_path, 'wb') as f:
-                            f.write(file_content)
-                        
-                        uploaded_files.append({
-                            'filename': filename,
-                            'path': file_path,
-                            'size': len(file_content)
-                        })
+                    try:
+                        filename_match = re.search(b'filename="([^"]+)"', part)
+                        if filename_match:
+                            filename = filename_match.group(1).decode('utf-8')
+                            
+                            # Извлекаем содержимое файла
+                            file_parts = part.split(b'\r\n\r\n')
+                            if len(file_parts) > 1:
+                                file_content = file_parts[1].rsplit(b'\r\n', 1)[0]
+                                
+                                # Сохраняем временный файл
+                                temp_dir = "temp_uploads"
+                                os.makedirs(temp_dir, exist_ok=True)
+                                file_path = os.path.join(temp_dir, f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}")
+                                
+                                with open(file_path, 'wb') as f:
+                                    f.write(file_content)
+                                
+                                uploaded_files.append({
+                                    'filename': filename,
+                                    'path': file_path,
+                                    'size': len(file_content)
+                                })
+                    except Exception as e:
+                        print(f"⚠️ Ошибка обработки файла: {e}")
+                        continue
             
-            # Обрабатываем файлы
+            # Формируем ответ
             response_text = ""
             
             if uploaded_files:
+                response_text += "📎 **Прикрепленные файлы:**\n"
                 for file_info in uploaded_files:
+                    response_text += f"• {file_info['filename']} ({self._format_size(file_info['size'])})\n"
+                    
+                    # Анализируем файлы
                     if file_info['filename'].lower().endswith('.zip'):
-                        # Анализ ZIP-архива
-                        analysis_result = self.ai.analyze_uploaded_zip(file_info['path'])
-                        response_text += f"\n\n📦 **Анализ архива {file_info['filename']}:**\n{analysis_result}"
+                        zip_analysis = self.ai.analyze_uploaded_zip(file_info['path'])
+                        response_text += f"\n📦 **Анализ архива:**\n{zip_analysis}\n"
                     else:
-                        # Анализ обычного файла
                         file_analysis = self.ai.analyze_uploaded_file(file_info['path'], file_info['filename'])
-                        response_text += f"\n\n{file_analysis}"
+                        response_text += f"\n{file_analysis}\n"
                     
                     # Удаляем временный файл
                     try:
                         os.remove(file_info['path'])
-                        print(f"🗑️ Удален временный файл: {file_info['path']}")
-                    except Exception as e:
-                        print(f"⚠️ Не удалось удалить временный файл: {e}")
+                    except:
+                        pass
             
-            # Добавляем ответ на текстовый запрос если есть
-            if message and not response_text:
-                # Если есть сообщение но нет файлов, используем обычный поиск
-                chat_response = self.ai.generate_smart_response(message)
-                response_text = chat_response
-            elif message and response_text:
-                # Если есть и сообщение и файлы, добавляем сообщение в начало
-                response_text = f"**Ваш запрос:** {message}" + response_text
+            # Добавляем ответ на текстовый запрос
+            if message:
+                if response_text:
+                    response_text = f"**Ваш запрос:** {message}\n\n" + response_text
+                else:
+                    # Если нет файлов, используем обычный поиск
+                    chat_response = self.ai.generate_smart_response(message)
+                    response_text = chat_response
             
             if not response_text:
-                response_text = "Пожалуйста, введите запрос или загрузите файл для анализа."
+                response_text = "Получены файлы, но не удалось их обработать."
             
+            # Отправляем ответ
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
@@ -2011,8 +2023,16 @@ class AIHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
             
         except Exception as e:
-            print(f"❌ Ошибка анализа с файлом: {e}")
+            print(f"❌ Ошибка в /analyze-with-file: {e}")
             self.send_error(500, f"Analysis error: {str(e)}")
+    
+    def _format_size(self, size_bytes):
+        """Форматирует размер в читаемый вид"""
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} TB"
     
     def _handle_file_upload(self):
         """Обрабатывает загрузку файлов"""
