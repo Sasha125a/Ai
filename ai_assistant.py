@@ -1574,6 +1574,34 @@ class EnhancedLearningAI:
         # Инициализация начальными знаниями
         self._initialize_with_basic_knowledge()
     
+    def _initialize_with_basic_knowledge(self):
+        """Инициализация базовыми знаниями"""
+        basic_knowledge = [
+            # Программирование
+            ("programming", "что такое python", 
+             "Python - это язык программирования высокого уровня с простым и понятным синтаксисом. Используется для веб-разработки, анализа данных, искусственного интеллекта и автоматизации.", 
+             "explanation", ["python", "язык", "программирование"]),
+            
+            ("programming", "как создать класс в python", 
+             "Для создания класса в Python используйте ключевое слово class:\n\n```python\nclass MyClass:\n    def __init__(self, name):\n        self.name = name\n    \n    def greet(self):\n        print(f'Привет, {self.name}!')\n```", 
+             "code_request", ["python", "класс", "ооп"]),
+            
+            # Приветствия
+            ("qa_pairs", "привет", 
+             "Привет! Я AI-помощник. Задавайте любые вопросы - найду ответы в интернете! 🤖", 
+             "greeting", ["приветствие"]),
+            
+            ("qa_pairs", "помощь", 
+             "Я могу:\n• 🔍 Искать информацию в интернете\n• 💻 Показывать примеры кода\n• 📚 Объяснять концепции\n• 🎯 Отвечать на любые вопросы\n\nПросто спросите о чем угодно! 💡", 
+             "help", ["помощь", "функции"]),
+        ]
+        
+        # Добавляем только если база пустая
+        if self.knowledge_base.get_statistics()["total_entries"] == 0:
+            print("📖 Инициализация базовыми знаниями...")
+            for category, question, answer, intent, tags in basic_knowledge:
+                self.knowledge_base.add_entry(category, question, answer, intent, tags)
+    
     def find_best_response(self, user_message, intent, entities, use_web_search=True):
         """Поиск лучшего ответа - ВСЕГДА используем веб-поиск если не нашли в базе"""
         
@@ -1732,6 +1760,98 @@ class SmartAI:
             'code_generated': 0
         }
     
+    def extract_entities(self, message):
+        """Извлечение сущностей из сообщения"""
+        # Простая реализация - можно улучшить
+        entities = {
+            'variables': [],
+            'functions': [],
+            'classes': [],
+            'operations': []
+        }
+        
+        words = message.lower().split()
+        for word in words:
+            if len(word) > 3 and word.isalpha():
+                entities['variables'].append(word)
+        
+        return entities
+    
+    def _detect_programming_language(self, message):
+        """Определение языка программирования из запроса"""
+        message_lower = message.lower()
+        
+        language_map = {
+            'python': ['python', 'питон'],
+            'javascript': ['javascript', 'js', 'джаваскрипт'],
+            'java': ['java', 'джава'],
+            'c++': ['c++', 'с++', 'cpp'],
+            'c#': ['c#', 'с#', 'c sharp'],
+            'c': [' c ', ' си '],
+            'php': ['php', 'пхп'],
+            'ruby': ['ruby', 'руби'],
+            'go': ['go', 'го'],
+            'rust': ['rust', 'раст']
+        }
+        
+        for lang, keywords in language_map.items():
+            if any(keyword in message_lower for keyword in keywords):
+                return lang
+        
+        return 'python'  # язык по умолчанию
+    
+    def analyze_uploaded_zip(self, file_path):
+        """Анализ загруженного ZIP-архива"""
+        try:
+            analysis = self.zip_analyzer.analyze_zip(file_path)
+            if "error" in analysis:
+                return f"❌ Ошибка анализа архива: {analysis['error']}"
+            
+            response = f"📦 **Анализ архива {analysis['filename']}:**\n"
+            response += f"• 📁 Файлов: {analysis['file_count']}\n"
+            response += f"• 📂 Папок: {analysis['folder_count']}\n"
+            response += f"• 📊 Размер: {analysis['total_size']} байт\n\n"
+            
+            if analysis['structure']:
+                response += "**Структура:**\n```\n"
+                response += "\n".join(analysis['structure'][:20])  # Ограничиваем вывод
+                if len(analysis['structure']) > 20:
+                    response += "\n... (и другие файлы)"
+                response += "\n```"
+            
+            return response
+        except Exception as e:
+            return f"❌ Ошибка анализа ZIP: {str(e)}"
+    
+    def analyze_uploaded_file(self, file_path, filename):
+        """Анализ загруженного файла"""
+        try:
+            if filename.lower().endswith('.txt') or filename.lower().endswith('.md'):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read(1000)  # Читаем первые 1000 символов
+                    return f"📄 **Содержимое {filename}:**\n```\n{content}\n```"
+            else:
+                return f"📄 **Файл {filename}** загружен успешно. Это не текстовый файл, поэтому содержимое не отображается."
+        except:
+            return f"📄 **Файл {filename}** загружен успешно. Не удалось прочитать содержимое."
+    
+    def get_learning_stats(self):
+        """Получение статистики обучения"""
+        return self.learning_stats
+    
+    def get_conversation_history(self, limit=20):
+        """Получение истории разговоров"""
+        return self.conversation_history[-limit:]
+    
+    def clear_conversation_history(self):
+        """Очистка истории разговоров"""
+        self.conversation_history = []
+        return "История очищена"
+    
+    def export_knowledge_base(self):
+        """Экспорт базы знаний"""
+        return self.learning_ai.export_knowledge()
+    
     def generate_smart_response(self, message):
         """Основной метод генерации ответов - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
         # Всегда сначала проверяем базовые интенты
@@ -1746,8 +1866,7 @@ class SmartAI:
         if any(word in message_lower for word in ['помощь', 'help', 'что ты умеешь']):
             return self._get_help_response()
         
-        # ИСПРАВЛЕНИЕ: Сначала пробуем поиск, потом генерацию кода
-        print(f"🔍 Обрабатываю запрос: {message}")
+        print(f"🔍 Обрабатываю запрос: '{message}'")
         
         # Получаем интенты и сущности для поиска
         intents = self.learning_ai.classifier.predict(message)
@@ -1759,25 +1878,9 @@ class SmartAI:
             message, primary_intent, entities, use_web_search=True
         )
         
-        # ИСПРАВЛЕНИЕ: Проверяем, нашли ли хороший ответ
-        if response and confidence > 0.5:
-            # Хороший ответ найден - используем его
-            self._update_stats(source)
-            self._save_to_history(message, response, source, confidence)
-            return response
+        print(f"📊 Результат поиска: источник={source}, уверенность={confidence:.2f}")
         
-        # ИСПРАВЛЕНИЕ: Если поиск не дал хорошего результата, пробуем генерацию кода
-        code_response = self._handle_code_generation_request(message)
-        if code_response:
-            return code_response
-        
-        # ИСПРАВЛЕНИЕ: Проверяем запросы на анализ ZIP-файлов (только информационные)
-        if any(word in message_lower for word in ['zip', 'архив', 'структур', 'распакуй', 'проанализируй архив']):
-            zip_response = self._handle_zip_analysis_request(message)
-            if zip_response:
-                return zip_response
-        
-        # ИСПРАВЛЕНИЕ: Если дошли сюда, используем ответ от поиска (даже с низкой уверенностью)
+        # Всегда используем найденный ответ (даже с низкой уверенностью)
         if response:
             self._update_stats(source)
             self._save_to_history(message, response, source, confidence)
