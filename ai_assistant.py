@@ -2705,20 +2705,28 @@ class AIHandler(BaseHTTPRequestHandler):
                     try {
                         let response;
                         
-             // Всегда используем /chat, даже с файлами
                         if (files.length > 0) {
-                            // Показываем сообщение, что файлы не поддерживаются
-                            addMessage('📎 Файлы прикреплены, но функциональность анализа файлов временно недоступна. Задайте текстовый вопрос.', false);
+                            // Отправка с файлами
+                            const formData = new FormData();
+                            formData.append('message', message);
+                            files.forEach(file => {
+                                formData.append('files', file);
+                            });
+                            
+                            response = await fetch('/analyze-with-file', {
+                                method: 'POST',
+                                body: formData
+                            });
+                        } else {
+                            // Обычный запрос
+                            response = await fetch('/chat', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ message: message })
+                            });
                         }
-
-                        // Всегда отправляем текстовый запрос
-                        response = await fetch('/chat', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ message: message })
-                        });
                         
                         const data = await response.json();
                         
