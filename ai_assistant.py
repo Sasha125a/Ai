@@ -1903,10 +1903,6 @@ class AIHandler(BaseHTTPRequestHandler):
             self._serve_history()
         elif self.path == '/export':
             self._export_knowledge()
-        elif self.path == '/upload':
-            self._serve_upload_form()
-        elif self.path.startswith('/download/'):
-            self._serve_file_download()
         else:
             self.send_error(404, "Not Found")
     
@@ -1917,11 +1913,169 @@ class AIHandler(BaseHTTPRequestHandler):
             self._clear_history()
         elif self.path == '/upload-file':
             self._handle_file_upload()
-        elif self.path == '/analyze-with-file':
+        elif self.path == '/analyze-with-file':  # ДОБАВЛЯЕМ ЭТОТ ENDPOINT
             self._handle_analysis_with_file()
         else:
             self.send_error(404, "Not Found")
     
+    def _handle_analysis_with_file(self):
+        """Обрабатывает запросы с прикрепленными файлами - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+        try:
+            content_type = self.headers.get('Content-Type', '')
+            if not content_type.startswith('multipart/form-data'):
+                self.send_error(400, "Invalid content type")
+                return
+            
+            boundary_match = re.search(r'boundary=(.*)$', content_type)
+            if not boundary_match:
+                self.send_error(400, "No boundary found")
+                return
+            
+            boundary = boundary_match.group(1).encode()
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            parts = post_data.split(b'--' + boundary)
+            message = ""
+            uploaded_files = []
+            
+            for part in parts:
+                if b'name="message"' in part:
+                    # Извлекаем текстовое сообщение
+                    message_content = part.split(b'\r\n\r\n')[1].rsplit(b'\r\n', 1)[0]
+                    message = message_content.decode('utf-8')
+                
+                elif b'name="files"' in part and b'filename="' in part:
+                    filename_match = re.search(b'filename="([^"]+)"', part)
+                    if filename_match:
+                        filename = filename_match.group(1).decode('utf-8')
+                        
+                        # Извлекаем содержимое файла
+                        file_content = part.split(b'\r\n\r\n')[1].rsplit(b'\r\n', 1)[0]
+                        
+                        # Сохраняем файл
+                        temp_dir = "temp_uploads"
+                        os.makedirs(temp_dir, exist_ok=True)
+                        file_path = os.path.join(temp_dir, f"chat_upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}")
+                        
+                        with open(file_path, 'wb') as f:
+                            f.write(file_content)
+                        
+                        uploaded_files.append({
+                            'filename': filename,
+                            'path': file_path,
+                            'size': len(file_content)
+                        })
+            
+            # Обрабатываем файлы
+            response_text = ""
+            
+            if uploaded_files:
+                for file_info in uploaded_files:
+                    if file_info['filename'].lower().endswith('.zip'):
+                        # Анализ ZIP-архива
+                        analysis_result = self.ai.analyze_uploaded_zip(file_info['path'])
+                        response_text += f"\n\n📦 **Анализ архива {file_info['filename']}:**\n{analysis_result}"
+                    else:
+                        # Анализ обычного файла
+                        file_analysis = self.ai.analyze_uploaded_file(file_info['path'], file_info['filename'])
+                        response_text += f"\n\n{file_analysis}"
+                    
+                    # Удаляем временный файл
+                    try:
+                        os.remove(file_info['path'])
+                        print(f"🗑️ Удален временный файл: {file_info['path']}")
+                    except Exception as e:
+                        print(f"⚠️ Не удалось удалить временный файл: {e}")
+            
+            # Добавляем ответ на текстовый запрос если есть
+            if message and not response_text:
+                # Если есть сообщение но нет файлов, используем обычный поиск
+                chat_response = self.ai.generate_smart_response(message)
+                response_text = chat_response
+            elif message and response_text:
+                # Если есть и сообщение и файлы, добавляем сообщение в начало
+                response_text = f"**Ваш запрос:** {message}" + response_text
+            
+            if not response_text:
+                response_text = "Пожалуйста, введите запрос или загрузите файл для анализа."
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            
+            response = {
+                "success": True,
+                "response": response_text
+            }
+            self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+            
+        except Exception as e:
+            print(f"❌ Ошибка анализа с файлом: {e}")
+            self.send_error(500, f"Analysis error: {str(e)}")
+    
+    def _handle_file_upload(self):
+        """Обрабатывает загрузку файлов"""
+        try:
+            content_type = self.headers.get('Content-Type', '')
+            if not content_type.startswith('multipart/form-data'):
+                self.send_error(400, "Invalid content type")
+                return
+            
+            boundary_match = re.search(r'boundary=(.*)$', content_type)
+            if not boundary_match:
+                self.send_error(400, "No boundary found")
+                return
+            
+            boundary = boundary_match.group(1).encode()
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            parts = post_data.split(b'--' + boundary)
+            uploaded_files = []
+            
+            for part in parts:
+                if b'name="files"' in part and b'filename="' in part:
+                    filename_match = re.search(b'filename="([^"]+)"', part)
+                    if filename_match:
+                        filename = filename_match.group(1).decode('utf-8')
+                        
+                        # Извлекаем содержимое файла
+                        file_content = part.split(b'\r\n\r\n')[1].rsplit(b'\r\n', 1)[0]
+                        
+                        # Сохраняем файл
+                        temp_dir = "temp_uploads"
+                        os.makedirs(temp_dir, exist_ok=True)
+                        file_path = os.path.join(temp_dir, f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}")
+                        
+                        with open(file_path, 'wb') as f:
+                            f.write(file_content)
+                        
+                        uploaded_files.append({
+                            'filename': filename,
+                            'path': file_path,
+                            'size': len(file_content)
+                        })
+            
+            if uploaded_files:
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                
+                response = {
+                    "success": True,
+                    "files": uploaded_files,
+                    "message": f"Загружено {len(uploaded_files)} файл(ов)"
+                }
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+            else:
+                self.send_error(400, "No files uploaded")
+                
+        except Exception as e:
+            print(f"❌ Ошибка загрузки файлов: {e}")
+            self.send_error(500, f"Upload error: {str(e)}")
+    
+    # Остальные методы остаются без изменений
     def _serve_html(self):
         self.send_response(200)
         self.send_header('Content-type', 'text/html; charset=utf-8')
@@ -2350,9 +2504,9 @@ class AIHandler(BaseHTTPRequestHandler):
                         <strong>Привет! Я ваш AI-помощник 🤖</strong><br><br>
                         Я могу:<br>
                         • 🔍 Искать информацию в интернете<br>
+                        • 💻 Генерировать код на разных языках<br>
                         • 📦 Анализировать ZIP-архивы<br>
-                        • 📄 Читать текстовые файлы<br>
-                        • 💻 Анализировать код<br><br>
+                        • 📄 Читать текстовые файлы<br><br>
                         <strong>Просто напишите сообщение или прикрепите файл!</strong>
                     </div>
                 </div>
@@ -2470,9 +2624,9 @@ class AIHandler(BaseHTTPRequestHandler):
                         // Format text with code blocks
                         let formattedText = text;
                         if (text.includes('```')) {
-                            formattedText = text.replace(/```(\\w+)?\\n([\\s\\S]*?)```/g, '<div class="code-block">$2</div>');
+                            formattedText = text.replace(/```(\w+)?\n([\s\S]*?)```/g, '<div class="code-block">$2</div>');
                         }
-                        formattedText = formattedText.replace(/\\n/g, '<br>');
+                        formattedText = formattedText.replace(/\n/g, '<br>');
                         
                         const time = new Date().toLocaleTimeString('ru-RU', { 
                             hour: '2-digit', 
@@ -2502,7 +2656,7 @@ class AIHandler(BaseHTTPRequestHandler):
                     
                     function typeChar() {
                         if (i < text.length) {
-                            if (text[i] === '\\n') {
+                            if (text[i] === '\n') {
                                 element.innerHTML += '<br>';
                             } else {
                                 element.innerHTML += text[i];
@@ -2637,6 +2791,74 @@ class AIHandler(BaseHTTPRequestHandler):
         </html>
         '''
         self.wfile.write(html.encode('utf-8'))
+    
+    # Остальные методы остаются без изменений
+    def _serve_stats(self):
+        """Отдача статистики обучения"""
+        stats = self.ai.get_learning_stats()
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        
+        self.wfile.write(json.dumps(stats).encode('utf-8'))
+    
+    def _serve_history(self):
+        """Отдача истории разговоров"""
+        history = self.ai.get_conversation_history(limit=20)
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        
+        self.wfile.write(json.dumps(history).encode('utf-8'))
+    
+    def _export_knowledge(self):
+        """Экспорт базы знаний"""
+        export_file = self.ai.export_knowledge_base()
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        
+        response = {"status": "success", "export_file": export_file}
+        self.wfile.write(json.dumps(response).encode('utf-8'))
+    
+    def _clear_history(self):
+        """Очистка истории разговоров"""
+        result = self.ai.clear_conversation_history()
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        
+        response = {"status": "success", "message": result}
+        self.wfile.write(json.dumps(response).encode('utf-8'))
+    
+    def _handle_chat(self):
+        """Обрабатывает чат-запросы"""
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+            message = data.get('message', '')
+            
+            response = self.ai.generate_smart_response(message)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json; charset=utf-8')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            self.wfile.write(json.dumps({"response": response}).encode('utf-8'))
+            
+        except Exception as e:
+            print(f"❌ Ошибка обработки чата: {e}")
+            self.send_error(500, f"Error: {str(e)}")
+    
+    def log_message(self, format, *args):
+        """Кастомное логирование"""
+        print(f"🌐 AI Assistant: {format % args}")
     
     def _handle_file_upload(self):
         """Обрабатывает загрузку файлов"""
@@ -2796,74 +3018,6 @@ class AIHandler(BaseHTTPRequestHandler):
         except Exception as e:
             print(f"❌ Ошибка анализа с файлом: {e}")
             self.send_error(500, f"Analysis error: {str(e)}")
-    
-    # Остальные методы остаются без изменений
-    def _serve_stats(self):
-        """Отдача статистики обучения"""
-        stats = self.ai.get_learning_stats()
-        
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        
-        self.wfile.write(json.dumps(stats).encode('utf-8'))
-    
-    def _serve_history(self):
-        """Отдача истории разговоров"""
-        history = self.ai.get_conversation_history(limit=20)
-        
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        
-        self.wfile.write(json.dumps(history).encode('utf-8'))
-    
-    def _export_knowledge(self):
-        """Экспорт базы знаний"""
-        export_file = self.ai.export_knowledge_base()
-        
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        
-        response = {"status": "success", "export_file": export_file}
-        self.wfile.write(json.dumps(response).encode('utf-8'))
-    
-    def _clear_history(self):
-        """Очистка истории разговоров"""
-        result = self.ai.clear_conversation_history()
-        
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        
-        response = {"status": "success", "message": result}
-        self.wfile.write(json.dumps(response).encode('utf-8'))
-    
-    def _handle_chat(self):
-        """Обрабатывает чат-запросы"""
-        try:
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            data = json.loads(post_data.decode('utf-8'))
-            message = data.get('message', '')
-            
-            response = self.ai.generate_smart_response(message)
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json; charset=utf-8')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            
-            self.wfile.write(json.dumps({"response": response}).encode('utf-8'))
-            
-        except Exception as e:
-            print(f"❌ Ошибка обработки чата: {e}")
-            self.send_error(500, f"Error: {str(e)}")
-    
-    def log_message(self, format, *args):
-        """Кастомное логирование"""
-        print(f"🌐 AI Assistant: {format % args}")
 
 def main():
     PORT = int(os.environ.get('PORT', 8000))
