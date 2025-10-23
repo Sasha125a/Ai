@@ -593,29 +593,43 @@ class TextKnowledgeBase:
             print(f"❌ Ошибка экспорта: {e}")
             return None
 
+# Добавляем в класс ZipAnalyzer новые методы для работы с большими файлами
+
 class ZipAnalyzer:
-    """Класс для анализа ZIP-архивов"""
+    """Класс для анализа ZIP-архивов с поддержкой больших файлов"""
     
     def __init__(self):
         self.temp_dir = None
+        self.max_zip_size = 500 * 1024 * 1024  # 500 МБ
+        self.max_file_size = 50 * 1024 * 1024  # 50 МБ для отдельных файлов
     
     def analyze_zip(self, zip_file_path):
-        """Анализирует ZIP-архив и возвращает структуру"""
+        """Анализирует ZIP-архив и возвращает структуру с поддержкой больших файлов"""
         try:
             if not os.path.exists(zip_file_path):
                 return {"error": "Файл не найден"}
+            
+            # Проверяем размер файла
+            file_size = os.path.getsize(zip_file_path)
+            if file_size > self.max_zip_size:
+                return {"error": f"Файл слишком большой ({file_size//1024//1024} МБ). Максимальный размер: {self.max_zip_size//1024//1024} МБ"}
+            
+            print(f"📦 Анализируем ZIP архив: {os.path.basename(zip_file_path)} ({file_size//1024//1024} МБ)")
             
             # Создаем временную директорию для распаковки
             self.temp_dir = tempfile.mkdtemp()
             
             structure = {
                 "filename": os.path.basename(zip_file_path),
-                "total_size": os.path.getsize(zip_file_path),
+                "total_size": file_size,
                 "file_count": 0,
                 "folder_count": 0,
                 "structure": [],
                 "file_types": {},
-                "created_at": datetime.now().isoformat()
+                "project_type": "unknown",
+                "created_at": datetime.now().isoformat(),
+                "large_files": [],
+                "project_structure": {}
             }
             
             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
@@ -628,11 +642,17 @@ class ZipAnalyzer:
                 structure["folder_count"] = self._count_folders(file_list)
                 structure["file_types"] = self._analyze_file_types(file_list)
                 
-                # Распаковываем для детального анализа
-                zip_ref.extractall(self.temp_dir)
+                # Определяем тип проекта
+                structure["project_type"] = self._detect_project_type(file_list)
                 
-                # Добавляем информацию о содержимом файлов
-                structure["content_analysis"] = self._analyze_contents(self.temp_dir)
+                # Анализируем большие файлы
+                structure["large_files"] = self._find_large_files(zip_ref, file_list)
+                
+                # Распаковываем только небольшие файлы для анализа
+                structure["content_analysis"] = self._analyze_contents_safe(zip_ref, file_list)
+                
+                # Детальный анализ структуры проекта
+                structure["project_structure"] = self._analyze_project_structure(file_list)
             
             return structure
             
@@ -641,8 +661,202 @@ class ZipAnalyzer:
         except Exception as e:
             return {"error": f"Ошибка анализа: {str(e)}"}
     
+    def _analyze_project_structure(self, file_list):
+        """Детальный анализ структуры проекта"""
+        project_structure = {
+            "config_files": [],
+            "source_directories": [],
+            "build_files": [],
+            "documentation": [],
+            "dependencies": [],
+            "tests": [],
+            "assets": []
+        }
+        
+        # Паттерны для определения структуры проекта
+        config_patterns = ['package.json', 'requirements.txt', 'pom.xml', 'build.gradle', 
+                          'webpack.config.js', 'dockerfile', '.gitignore', 'config/', 'settings.']
+        
+        source_patterns = ['src/', 'lib/', 'modules/', 'components/', 'app/', 'main/']
+        build_patterns = ['dist/', 'build/', 'target/', 'out/', '.gradle/', 'node_modules/']
+        doc_patterns = ['readme', 'docs/', 'documentation/', 'help/', 'guide.']
+        test_patterns = ['test/', 'tests/', 'spec/', '__tests__/', 'cypress/', 'jest.']
+        asset_patterns = ['assets/', 'images/', 'static/', 'media/', 'fonts/', 'icons/']
+        
+        for file_path in file_list:
+            # Пропускаем системные файлы
+            if '__MACOSX' in file_path or '.DS_Store' in file_path:
+                continue
+                
+            file_lower = file_path.lower()
+            
+            # Конфигурационные файлы
+            if any(pattern in file_lower for pattern in config_patterns):
+                project_structure["config_files"].append(file_path)
+            
+            # Исходный код
+            if any(pattern in file_lower for pattern in source_patterns):
+                project_structure["source_directories"].append(file_path)
+            
+            # Сборка
+            if any(pattern in file_lower for pattern in build_patterns):
+                project_structure["build_files"].append(file_path)
+            
+            # Документация
+            if any(pattern in file_lower for pattern in doc_patterns):
+                project_structure["documentation"].append(file_path)
+            
+            # Тесты
+            if any(pattern in file_lower for pattern in test_patterns):
+                project_structure["tests"].append(file_path)
+            
+            # Ресурсы
+            if any(pattern in file_lower for pattern in asset_patterns):
+                project_structure["assets"].append(file_path)
+        
+        # Убираем дубликаты и сортируем
+        for key in project_structure:
+            project_structure[key] = sorted(list(set(project_structure[key])))
+        
+        return project_structure
+    
+    def _detect_project_type(self, file_list):
+        """Определяет тип проекта по файлам"""
+        file_lower = [f.lower() for f in file_list]
+        
+        # Python проект
+        if any(f.endswith('.py') for f in file_lower) or 'requirements.txt' in file_lower:
+            return "Python"
+        
+        # JavaScript/Node.js проект
+        if any(f.endswith(('.js', '.ts')) for f in file_lower) or 'package.json' in file_lower:
+            return "JavaScript/Node.js"
+        
+        # Java проект
+        if any(f.endswith('.java') for f in file_lower) or 'pom.xml' in file_lower or 'build.gradle' in file_lower:
+            return "Java"
+        
+        # C# проект
+        if any(f.endswith('.cs') for f in file_lower) or any('.csproj' in f for f in file_lower):
+            return "C#"
+        
+        # C++ проект
+        if any(f.endswith(('.cpp', '.c', '.h', '.hpp')) for f in file_lower) or 'cmakelists.txt' in file_lower:
+            return "C/C++"
+        
+        # Веб проект
+        if any(f.endswith(('.html', '.css', '.php')) for f in file_lower):
+            return "Web"
+        
+        # Данные
+        if any(f.endswith(('.csv', '.json', '.xml')) for f in file_lower):
+            return "Data"
+        
+        return "Mixed/Unknown"
+    
+    def _find_large_files(self, zip_ref, file_list):
+        """Находит большие файлы в архиве"""
+        large_files = []
+        for file_info in zip_ref.infolist():
+            if file_info.file_size > 10 * 1024 * 1024:  # 10 МБ
+                large_files.append({
+                    'name': file_info.filename,
+                    'size': file_info.file_size,
+                    'size_mb': file_info.file_size // 1024 // 1024
+                })
+        
+        # Сортируем по размеру (по убыванию)
+        large_files.sort(key=lambda x: x['size'], reverse=True)
+        return large_files[:10]  # Топ 10 самых больших файлов
+    
+    def _analyze_contents_safe(self, zip_ref, file_list):
+        """Безопасный анализ содержимого с ограничением по размеру"""
+        analysis = {
+            "readme_files": [],
+            "code_files": [],
+            "config_files": [],
+            "image_files": [],
+            "document_files": [],
+            "sample_content": {}
+        }
+        
+        code_extensions = {'.py', '.js', '.java', '.cpp', '.c', '.html', '.css', '.php', '.rb', '.go', '.rs', '.ts'}
+        config_extensions = {'.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.toml'}
+        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp'}
+        document_extensions = {'.txt', '.md', '.pdf', '.doc', '.docx', '.rtf'}
+        
+        # Анализируем только первые 50 файлов и файлы меньше 1 МБ
+        analyzed_count = 0
+        max_files_to_analyze = 50
+        
+        for file_path in file_list:
+            if analyzed_count >= max_files_to_analyze:
+                break
+                
+            # Пропускаем системные файлы и папки
+            if file_path.endswith('/') or '__MACOSX' in file_path or file_path.startswith('.'):
+                continue
+            
+            try:
+                file_info = zip_ref.getinfo(file_path)
+                
+                # Пропускаем файлы больше 1 МБ
+                if file_info.file_size > 1024 * 1024:
+                    continue
+                
+                ext = os.path.splitext(file_path)[1].lower()
+                
+                # Классифицируем файлы
+                if file_path.lower() in ['readme', 'readme.txt', 'readme.md', 'readme.rst']:
+                    analysis["readme_files"].append(file_path)
+                    content = self._read_zip_file_content(zip_ref, file_path)
+                    if content:
+                        analysis["sample_content"][file_path] = content[:500] + "..." if len(content) > 500 else content
+                
+                elif ext in code_extensions:
+                    analysis["code_files"].append(file_path)
+                    # Читаем только первые 10 код-файлов
+                    if len(analysis["sample_content"]) < 10:
+                        content = self._read_zip_file_content(zip_ref, file_path)
+                        if content:
+                            analysis["sample_content"][file_path] = content[:1000] + "..." if len(content) > 1000 else content
+                
+                elif ext in config_extensions:
+                    analysis["config_files"].append(file_path)
+                
+                elif ext in image_extensions:
+                    analysis["image_files"].append(file_path)
+                
+                elif ext in document_extensions:
+                    analysis["document_files"].append(file_path)
+                
+                analyzed_count += 1
+                    
+            except Exception as e:
+                continue
+        
+        return analysis
+    
+    def _read_zip_file_content(self, zip_ref, file_path, max_size=50000):
+        """Читает содержимое файла из ZIP архива"""
+        try:
+            with zip_ref.open(file_path, 'r') as f:
+                # Пробуем прочитать как текст
+                try:
+                    content = f.read(max_size).decode('utf-8')
+                except UnicodeDecodeError:
+                    try:
+                        f.seek(0)
+                        content = f.read(max_size).decode('cp1251')
+                    except:
+                        content = "[Бинарный файл или неизвестная кодировка]"
+                
+                return content
+        except Exception as e:
+            return f"[Ошибка чтения: {str(e)}]"
+    
     def _build_tree_structure(self, file_list):
-        """Строит древовидную структуру файлов"""
+        """Строит древовидную структуру файлов с улучшенным форматированием"""
         root = {}
         
         for file_path in file_list:
@@ -650,13 +864,10 @@ class ZipAnalyzer:
             if '__MACOSX' in file_path or '.DS_Store' in file_path:
                 continue
                 
-            parts = file_path.split('/')
+            parts = [p for p in file_path.split('/') if p]  # Убираем пустые части
             current = root
             
             for i, part in enumerate(parts):
-                if not part:  # Пустые части (например, от завершающего /)
-                    continue
-                    
                 if i == len(parts) - 1:
                     # Это файл
                     current[part] = {"type": "file", "path": file_path}
@@ -666,21 +877,39 @@ class ZipAnalyzer:
                         current[part] = {"type": "folder", "children": {}}
                     current = current[part]["children"]
         
-        return self._format_tree(root)
+        return self._format_tree_with_stats(root)
     
-    def _format_tree(self, node, level=0):
-        """Форматирует дерево в читаемый вид"""
+    def _format_tree_with_stats(self, node, level=0, prefix=""):
+        """Форматирует дерево в читаемый вид со статистикой"""
         result = []
         indent = "  " * level
         
-        for name, info in sorted(node.items()):
+        items = sorted(node.items(), key=lambda x: (x[1]["type"] != "folder", x[0]))  # Папки сначала
+        
+        for i, (name, info) in enumerate(items):
+            is_last = i == len(items) - 1
+            current_prefix = prefix + ("└── " if is_last else "├── ")
+            next_prefix = prefix + ("    " if is_last else "│   ")
+            
             if info["type"] == "folder":
-                result.append(f"{indent}📁 {name}/")
-                result.extend(self._format_tree(info["children"], level + 1))
+                # Считаем количество файлов в папке
+                file_count = self._count_files_in_folder(info["children"])
+                result.append(f"{indent}{current_prefix}📁 {name}/ ({file_count} файлов)")
+                result.extend(self._format_tree_with_stats(info["children"], level + 1, next_prefix))
             else:
-                result.append(f"{indent}📄 {name}")
+                result.append(f"{indent}{current_prefix}📄 {name}")
         
         return result
+    
+    def _count_files_in_folder(self, node):
+        """Считает количество файлов в папке"""
+        count = 0
+        for name, info in node.items():
+            if info["type"] == "file":
+                count += 1
+            else:
+                count += self._count_files_in_folder(info["children"])
+        return count
     
     def _count_folders(self, file_list):
         """Считает количество уникальных папок"""
@@ -688,11 +917,16 @@ class ZipAnalyzer:
         for file_path in file_list:
             dir_path = os.path.dirname(file_path)
             if dir_path:  # Не корневая директория
-                folders.add(dir_path)
+                # Разбиваем путь и добавляем все родительские папки
+                parts = dir_path.split('/')
+                for i in range(1, len(parts) + 1):
+                    folder = '/'.join(parts[:i])
+                    if folder:
+                        folders.add(folder)
         return len(folders)
     
     def _analyze_file_types(self, file_list):
-        """Анализирует типы файлов в архиве"""
+        """Анализирует типы файлов в архиве с группировкой"""
         file_types = {}
         for file_path in file_list:
             if not file_path.endswith('/'):  # Это не папка
@@ -700,77 +934,145 @@ class ZipAnalyzer:
                 if not ext:
                     ext = "без расширения"
                 file_types[ext] = file_types.get(ext, 0) + 1
-        return dict(sorted(file_types.items(), key=lambda x: x[1], reverse=True))
-    
-    def _analyze_contents(self, extract_path):
-        """Анализирует содержимое файлов"""
-        analysis = {
-            "readme_files": [],
-            "code_files": [],
-            "config_files": [],
-            "image_files": [],
-            "document_files": []
+        
+        # Группируем по категориям
+        categorized = {
+            "code_files": 0,
+            "config_files": 0,
+            "media_files": 0,
+            "document_files": 0,
+            "archive_files": 0,
+            "other_files": 0
         }
         
-        code_extensions = {'.py', '.js', '.java', '.cpp', '.c', '.html', '.css', '.php', '.rb', '.go', '.rs'}
-        config_extensions = {'.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.toml'}
-        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp'}
-        document_extensions = {'.txt', '.md', '.pdf', '.doc', '.docx', '.rtf'}
+        code_ext = {'.py', '.js', '.java', '.cpp', '.c', '.html', '.css', '.php', '.rb', '.go', '.rs', '.ts', '.swift'}
+        config_ext = {'.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.toml', '.env'}
+        media_ext = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp', '.mp4', '.avi', '.mov', '.mp3', '.wav'}
+        document_ext = {'.txt', '.md', '.pdf', '.doc', '.docx', '.rtf', '.odt'}
+        archive_ext = {'.zip', '.rar', '.7z', '.tar', '.gz'}
         
-        for root_dir, dirs, files in os.walk(extract_path):
-            for file in files:
-                file_path = os.path.join(root_dir, file)
-                rel_path = os.path.relpath(file_path, extract_path)
-                ext = os.path.splitext(file)[1].lower()
-                
-                # Пропускаем системные файлы
-                if file.startswith('.') or '__MACOSX' in rel_path:
-                    continue
-                
-                # Классифицируем файлы
-                if file.lower() in ['readme', 'readme.txt', 'readme.md', 'readme.rst']:
-                    analysis["readme_files"].append(rel_path)
-                elif ext in code_extensions:
-                    analysis["code_files"].append(rel_path)
-                elif ext in config_extensions:
-                    analysis["config_files"].append(rel_path)
-                elif ext in image_extensions:
-                    analysis["image_files"].append(rel_path)
-                elif ext in document_extensions:
-                    analysis["document_files"].append(rel_path)
+        for ext, count in file_types.items():
+            if ext in code_ext:
+                categorized["code_files"] += count
+            elif ext in config_ext:
+                categorized["config_files"] += count
+            elif ext in media_ext:
+                categorized["media_files"] += count
+            elif ext in document_ext:
+                categorized["document_files"] += count
+            elif ext in archive_ext:
+                categorized["archive_files"] += count
+            else:
+                categorized["other_files"] += count
         
-        return analysis
-    
-    def read_file_content(self, file_path, max_lines=50):
-        """Читает содержимое файла с ограничением по количеству строк"""
-        try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = []
-                for i, line in enumerate(f):
-                    if i >= max_lines:
-                        lines.append("... (файл слишком большой, показаны первые 50 строк)")
-                        break
-                    lines.append(line.rstrip())
-                return lines
-        except:
+        return {
+            "detailed": dict(sorted(file_types.items(), key=lambda x: x[1], reverse=True)[:20]),  # Топ 20 расширений
+            "categorized": categorized
+        }
+
+# Обновляем метод analyze_uploaded_zip в классе SmartAI
+def analyze_uploaded_zip(self, file_path):
+    """Анализ загруженного ZIP-архива с улучшенным выводом"""
+    try:
+        analysis = self.zip_analyzer.analyze_zip(file_path)
+        if "error" in analysis:
+            return f"❌ Ошибка анализа архива: {analysis['error']}"
+        
+        response = f"📦 **Детальный анализ архива: {analysis['filename']}**\n\n"
+        response += f"**📊 Основная информация:**\n"
+        response += f"• 📁 Всего файлов: {analysis['file_count']}\n"
+        response += f"• 📂 Папок: {analysis['folder_count']}\n"
+        response += f"• 📏 Размер: {self._format_size(analysis['total_size'])}\n"
+        response += f"• 🎯 Тип проекта: **{analysis['project_type']}**\n\n"
+        
+        # Статистика по типам файлов
+        file_types = analysis['file_types']['categorized']
+        response += f"**📋 Статистика файлов:**\n"
+        response += f"• 💻 Файлы кода: {file_types['code_files']}\n"
+        response += f"• ⚙️ Конфигурационные: {file_types['config_files']}\n"
+        response += f"• 📄 Документы: {file_types['document_files']}\n"
+        response += f"• 🖼️ Медиа: {file_types['media_files']}\n"
+        response += f"• 🗜️ Архивы: {file_types['archive_files']}\n"
+        response += f"• ❓ Прочие: {file_types['other_files']}\n\n"
+        
+        # Большие файлы
+        if analysis['large_files']:
+            response += f"**📏 Самые большие файлы:**\n"
+            for large_file in analysis['large_files'][:5]:
+                response += f"• {large_file['name']} ({large_file['size_mb']} МБ)\n"
+            response += "\n"
+        
+        # Структура проекта
+        project_struct = analysis['project_structure']
+        response += f"**🏗️ Структура проекта:**\n"
+        
+        if project_struct['config_files']:
+            response += f"• ⚙️ Конфигурационные файлы: {len(project_struct['config_files'])}\n"
+        if project_struct['source_directories']:
+            response += f"• 💻 Исходный код: {len(project_struct['source_directories'])} директорий\n"
+        if project_struct['tests']:
+            response += f"• 🧪 Тесты: {len(project_struct['tests'])} файлов\n"
+        if project_struct['documentation']:
+            response += f"• 📚 Документация: {len(project_struct['documentation'])} файлов\n"
+        if project_struct['assets']:
+            response += f"• 🎨 Ресурсы: {len(project_struct['assets'])} файлов\n"
+        response += "\n"
+        
+        # Дерево структуры
+        if analysis['structure']:
+            response += "**🌳 Структура каталогов:**\n```\n"
+            # Показываем только первые 30 строк структуры для компактности
+            structure_lines = analysis['structure'][:30]
+            response += "\n".join(structure_lines)
+            if len(analysis['structure']) > 30:
+                response += f"\n... и еще {len(analysis['structure']) - 30} файлов/папок"
+            response += "\n```\n"
+        
+        # Примеры содержимого
+        content_analysis = analysis['content_analysis']
+        if content_analysis['sample_content']:
+            response += "**📖 Примеры содержимого:**\n"
+            for file_path, content in list(content_analysis['sample_content'].items())[:3]:
+                response += f"`{file_path}`:\n```\n{content}\n```\n"
+        
+        return response
+        
+    except Exception as e:
+        return f"❌ Ошибка анализа ZIP: {str(e)}"
+
+# Добавляем метод для анализа отдельных файлов
+def analyze_uploaded_file(self, file_path, filename):
+    """Анализ отдельного файла"""
+    try:
+        file_size = os.path.getsize(file_path)
+        ext = os.path.splitext(filename)[1].lower()
+        
+        response = f"📄 **Анализ файла: {filename}**\n"
+        response += f"• 📏 Размер: {self._format_size(file_size)}\n"
+        response += f"• 🔤 Расширение: {ext if ext else 'нет'}\n\n"
+        
+        # Читаем содержимое для текстовых файлов
+        if file_size < 2 * 1024 * 1024:  # До 2 МБ
             try:
-                with open(file_path, 'r', encoding='cp1251', errors='ignore') as f:
-                    lines = []
-                    for i, line in enumerate(f):
-                        if i >= max_lines:
-                            lines.append("... (файл слишком большой, показаны первые 50 строк)")
-                            break
-                        lines.append(line.rstrip())
-                    return lines
-            except:
-                return ["[Не удалось прочитать файл - бинарный файл или неизвестная кодировка]"]
-    
-    def cleanup(self):
-        """Очищает временные файлы"""
-        if self.temp_dir and os.path.exists(self.temp_dir):
-            import shutil
-            shutil.rmtree(self.temp_dir)
-            self.temp_dir = None
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read(5000)  # Первые 5000 символов
+                    response += f"**Содержимое:**\n```\n{content}\n```"
+            except UnicodeDecodeError:
+                try:
+                    with open(file_path, 'r', encoding='cp1251') as f:
+                        content = f.read(5000)
+                        response += f"**Содержимое:**\n```\n{content}\n```"
+                except:
+                    response += "❌ Не удалось прочитать файл (бинарный файл или неизвестная кодировка)"
+            except Exception as e:
+                response += f"❌ Ошибка чтения файла: {str(e)}"
+        else:
+            response += "📏 Файл слишком большой для отображения содержимого"
+        
+        return response
+        
+    except Exception as e:
+        return f"❌ Ошибка анализа файла: {str(e)}"
 
 class IntelligentCodeGenerator:
     """Интеллектуальный генератор кода, который понимает правила языков"""
