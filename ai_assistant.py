@@ -1738,7 +1738,7 @@ class SmartAI:
         }
     
     def generate_smart_response(self, message):
-        """Основной метод генерации ответов"""
+        """Основной метод генерации ответов - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
         # Всегда сначала проверяем базовые интенты
         message_lower = message.lower()
         
@@ -1751,30 +1751,50 @@ class SmartAI:
         if any(word in message_lower for word in ['помощь', 'help', 'что ты умеешь']):
             return self._get_help_response()
         
-        # Проверяем запросы на генерацию кода
+        # ИСПРАВЛЕНИЕ: Сначала пробуем поиск, потом генерацию кода
+        print(f"🔍 Обрабатываю запрос: {message}")
+        
+        # Получаем интенты и сущности для поиска
+        intents = self.learning_ai.classifier.predict(message)
+        entities = self.extract_entities(message)
+        primary_intent = intents[0] if intents else "unknown"
+        
+        # Пытаемся найти ответ через EnhancedLearningAI
+        response, confidence, source = self.learning_ai.find_best_response(
+            message, primary_intent, entities, use_web_search=True
+        )
+        
+        # ИСПРАВЛЕНИЕ: Проверяем, нашли ли хороший ответ
+        if response and confidence > 0.5:
+            # Хороший ответ найден - используем его
+            self._update_stats(source)
+            self._save_to_history(message, response, source, confidence)
+            return response
+        
+        # ИСПРАВЛЕНИЕ: Если поиск не дал хорошего результата, пробуем генерацию кода
         code_response = self._handle_code_generation_request(message)
         if code_response:
             return code_response
         
-        # Проверяем запросы на анализ ZIP-файлов (только если явно упоминаются)
+        # ИСПРАВЛЕНИЕ: Проверяем запросы на анализ ZIP-файлов (только информационные)
         if any(word in message_lower for word in ['zip', 'архив', 'структур', 'распакуй', 'проанализируй архив']):
             zip_response = self._handle_zip_analysis_request(message)
             if zip_response:
                 return zip_response
         
-        # Обычный поиск для всех остальных запросов
-        print(f"🔍 Обрабатываю запрос: {message}")
+        # ИСПРАВЛЕНИЕ: Если дошли сюда, используем ответ от поиска (даже с низкой уверенностью)
+        if response:
+            self._update_stats(source)
+            self._save_to_history(message, response, source, confidence)
+            return response
         
-        intents = self.learning_ai.classifier.predict(message)
-        entities = self.extract_entities(message)
-        primary_intent = intents[0] if intents else "unknown"
-        
-        # Всегда пытаемся найти ответ через EnhancedLearningAI
-        response, confidence, source = self.learning_ai.find_best_response(
-            message, primary_intent, entities, use_web_search=True
-        )
-        
-        # Обновляем статистику
+        # Запасной вариант
+        fallback_response = "🤔 Я не совсем понял ваш вопрос. Попробуйте переформулировать или задать более конкретный вопрос."
+        self._save_to_history(message, fallback_response, "fallback", 0.1)
+        return fallback_response
+    
+    def _update_stats(self, source):
+        """Обновляет статистику"""
         self.learning_stats['conversations_processed'] += 1
         self.learning_stats['knowledge_base_entries'] = (
             self.learning_ai.get_knowledge_stats()["total_entries"]
@@ -1783,11 +1803,12 @@ class SmartAI:
         if source == "web_search":
             self.learning_stats['web_searches'] += 1
             self.learning_stats['successful_searches'] += 1
-            print(f"✅ Найден ответ через веб-поиск: {message[:30]}...")
+            print(f"✅ Найден ответ через веб-поиск")
         else:
-            print(f"💡 Ответ из базы знаний: {message[:30]}...")
-        
-        # Сохраняем в историю
+            print(f"💡 Ответ из базы знаний")
+    
+    def _save_to_history(self, message, response, source, confidence):
+        """Сохраняет в историю"""
         self.conversation_history.append({
             'message': message,
             'response': response,
@@ -1799,8 +1820,6 @@ class SmartAI:
         # Ограничиваем историю
         if len(self.conversation_history) > 50:
             self.conversation_history = self.conversation_history[-20:]
-        
-        return response
     
     def _get_help_response(self):
         """Возвращает сообщение помощи"""
@@ -1824,32 +1843,44 @@ Python, JavaScript, Java, C, C++, C#, PHP, Ruby, Go, Rust
 Просто спросите о чем угодно! 💫"""
     
     def _handle_code_generation_request(self, message):
-        """Обрабатывает запросы на генерацию кода"""
+        """Обрабатывает запросы на генерацию кода - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
         message_lower = message.lower()
-    
-        code_keywords = [
-            'напиши код', 'сгенерируй код', 'покажи код', 'пример кода',
-            'код на', 'программ', 'функци', 'класс', 'алгоритм',
-            'создай программу', 'реализуй', 'разработай'
-        ]
-    
-        if any(keyword in message_lower for keyword in code_keywords):
-            print(f"💻 Генерирую код для запроса: {message}")
         
+        # Более точные ключевые слова для генерации кода
+        code_keywords = [
+            'напиши код', 'сгенерируй код', 'пример кода на', 'код для',
+            'реализуй на', 'создай программу на', 'функция на', 'класс на'
+        ]
+        
+        # Проверяем, является ли запрос явным запросом на генерацию кода
+        is_code_request = any(keyword in message_lower for keyword in code_keywords)
+        
+        # Также проверяем наличие упоминания конкретных языков программирования
+        programming_languages = [
+            'python', 'javascript', 'java', 'c++', 'c#', 'c ', 'php', 'ruby', 'go', 'rust',
+            'питон', 'джаваскрипт', 'джава', 'си плюс', 'си шарп', 'си ', 'пхп', 'руби'
+        ]
+        
+        has_language_mention = any(lang in message_lower for lang in programming_languages)
+        
+        # Генерируем код только если это явный запрос ИЛИ есть упоминание языка
+        if is_code_request or (has_language_mention and any(word in message_lower for word in ['код', 'функц', 'класс', 'алгоритм'])):
+            print(f"💻 Генерирую код для запроса: {message}")
+            
             # Определяем язык программирования
             language = self._detect_programming_language(message)
-        
+            
             # Генерируем код
             try:
                 generated_code = self.code_generator.generate_code(message, language)
-            
+                
                 # Обновляем статистику
                 self.learning_stats['code_generated'] += 1
-            
+                
                 response = f"""💻 **Сгенерированный код на {language.upper()}:**
 
-    ```{language}
-    {generated_code}
+```{language}
+{generated_code}
     ```"""
             
                 return response
