@@ -1826,30 +1826,39 @@ Python, JavaScript, Java, C, C++, C#, PHP, Ruby, Go, Rust
     def _handle_code_generation_request(self, message):
         """Обрабатывает запросы на генерацию кода"""
         message_lower = message.lower()
-        
+    
         code_keywords = [
             'напиши код', 'сгенерируй код', 'покажи код', 'пример кода',
             'код на', 'программ', 'функци', 'класс', 'алгоритм',
             'создай программу', 'реализуй', 'разработай'
         ]
-        
+    
         if any(keyword in message_lower for keyword in code_keywords):
             print(f"💻 Генерирую код для запроса: {message}")
-            
+        
             # Определяем язык программирования
             language = self._detect_programming_language(message)
-            
+        
             # Генерируем код
             try:
                 generated_code = self.code_generator.generate_code(message, language)
-                
+            
                 # Обновляем статистику
                 self.learning_stats['code_generated'] += 1
-                
+            
                 response = f"""💻 **Сгенерированный код на {language.upper()}:**
 
-```{language}
-{generated_code}"""
+    ```{language}
+    {generated_code}
+    ```"""
+            
+                return response
+            
+            except Exception as e:
+                print(f"❌ Ошибка генерации кода: {e}")
+                return f"❌ Произошла ошибка при генерации кода: {str(e)}"
+    
+        return None
 
 class AIHandler(BaseHTTPRequestHandler):
     ai = SmartAI()
