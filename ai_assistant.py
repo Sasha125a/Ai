@@ -1760,98 +1760,6 @@ class SmartAI:
             'code_generated': 0
         }
     
-    def extract_entities(self, message):
-        """Извлечение сущностей из сообщения"""
-        # Простая реализация - можно улучшить
-        entities = {
-            'variables': [],
-            'functions': [],
-            'classes': [],
-            'operations': []
-        }
-        
-        words = message.lower().split()
-        for word in words:
-            if len(word) > 3 and word.isalpha():
-                entities['variables'].append(word)
-        
-        return entities
-    
-    def _detect_programming_language(self, message):
-        """Определение языка программирования из запроса"""
-        message_lower = message.lower()
-        
-        language_map = {
-            'python': ['python', 'питон'],
-            'javascript': ['javascript', 'js', 'джаваскрипт'],
-            'java': ['java', 'джава'],
-            'c++': ['c++', 'с++', 'cpp'],
-            'c#': ['c#', 'с#', 'c sharp'],
-            'c': [' c ', ' си '],
-            'php': ['php', 'пхп'],
-            'ruby': ['ruby', 'руби'],
-            'go': ['go', 'го'],
-            'rust': ['rust', 'раст']
-        }
-        
-        for lang, keywords in language_map.items():
-            if any(keyword in message_lower for keyword in keywords):
-                return lang
-        
-        return 'python'  # язык по умолчанию
-    
-    def analyze_uploaded_zip(self, file_path):
-        """Анализ загруженного ZIP-архива"""
-        try:
-            analysis = self.zip_analyzer.analyze_zip(file_path)
-            if "error" in analysis:
-                return f"❌ Ошибка анализа архива: {analysis['error']}"
-            
-            response = f"📦 **Анализ архива {analysis['filename']}:**\n"
-            response += f"• 📁 Файлов: {analysis['file_count']}\n"
-            response += f"• 📂 Папок: {analysis['folder_count']}\n"
-            response += f"• 📊 Размер: {analysis['total_size']} байт\n\n"
-            
-            if analysis['structure']:
-                response += "**Структура:**\n```\n"
-                response += "\n".join(analysis['structure'][:20])  # Ограничиваем вывод
-                if len(analysis['structure']) > 20:
-                    response += "\n... (и другие файлы)"
-                response += "\n```"
-            
-            return response
-        except Exception as e:
-            return f"❌ Ошибка анализа ZIP: {str(e)}"
-    
-    def analyze_uploaded_file(self, file_path, filename):
-        """Анализ загруженного файла"""
-        try:
-            if filename.lower().endswith('.txt') or filename.lower().endswith('.md'):
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read(1000)  # Читаем первые 1000 символов
-                    return f"📄 **Содержимое {filename}:**\n```\n{content}\n```"
-            else:
-                return f"📄 **Файл {filename}** загружен успешно. Это не текстовый файл, поэтому содержимое не отображается."
-        except:
-            return f"📄 **Файл {filename}** загружен успешно. Не удалось прочитать содержимое."
-    
-    def get_learning_stats(self):
-        """Получение статистики обучения"""
-        return self.learning_stats
-    
-    def get_conversation_history(self, limit=20):
-        """Получение истории разговоров"""
-        return self.conversation_history[-limit:]
-    
-    def clear_conversation_history(self):
-        """Очистка истории разговоров"""
-        self.conversation_history = []
-        return "История очищена"
-    
-    def export_knowledge_base(self):
-        """Экспорт базы знаний"""
-        return self.learning_ai.export_knowledge()
-    
     def generate_smart_response(self, message):
         """Основной метод генерации ответов - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
         # Всегда сначала проверяем базовые интенты
@@ -1865,8 +1773,16 @@ class SmartAI:
         
         if any(word in message_lower for word in ['помощь', 'help', 'что ты умеешь']):
             return self._get_help_response()
-        
-        print(f"🔍 Обрабатываю запрос: '{message}'")
+
+        # 🔥 ВЫСШИЙ ПРИОРИТЕТ: Сначала проверяем запросы на генерацию кода
+        code_response = self._handle_code_generation_request(message)
+        if code_response:
+            print("💻 Обнаружен запрос на генерацию кода - высший приоритет")
+            self._update_stats("code_generation")
+            self._save_to_history(message, code_response, "code_generation", 0.9)
+            return code_response
+
+        print(f"🔍 Обрабатываю обычный запрос: '{message}'")
         
         # Получаем интенты и сущности для поиска
         intents = self.learning_ai.classifier.predict(message)
@@ -1880,7 +1796,7 @@ class SmartAI:
         
         print(f"📊 Результат поиска: источник={source}, уверенность={confidence:.2f}")
         
-        # Всегда используем найденный ответ (даже с низкой уверенностью)
+        # Используем найденный ответ
         if response:
             self._update_stats(source)
             self._save_to_history(message, response, source, confidence)
@@ -1902,6 +1818,9 @@ class SmartAI:
             self.learning_stats['web_searches'] += 1
             self.learning_stats['successful_searches'] += 1
             print(f"✅ Найден ответ через веб-поиск")
+        elif source == "code_generation":
+            self.learning_stats['code_generated'] += 1
+            print(f"💻 Сгенерирован код")
         else:
             print(f"💡 Ответ из базы знаний")
     
@@ -1930,52 +1849,70 @@ class SmartAI:
 • 📦 **Анализ ZIP-архивов** - структура и содержимое файлов
 
 **Поддерживаемые языки программирования:**
-Python, JavaScript, Java, C, C++, C#, PHP, Ruby, Go, Rust
+Python, JavaScript, Java, C, C++, C#, PHP, Ruby, Go, Rust, HTML, CSS, SQL
 
-**Примеры запросов:**
-• "Напиши калькулятор на Python"
+**Примеры запросов для генерации кода:**
+• "Напиши код калькулятора на Python"
 • "Сгенерируй класс на Java для работы с пользователями"
 • "Покажи пример работы с файлами на C++"
 • "Создай функцию сортировки на JavaScript"
+• "Напиши программу для парсинга HTML на Python"
 
 Просто спросите о чем угодно! 💫"""
     
     def _handle_code_generation_request(self, message):
-        """Обрабатывает запросы на генерацию кода - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+        """Обрабатывает запросы на генерацию кода - УЛУЧШЕННАЯ ВЕРСИЯ"""
         message_lower = message.lower()
         
-        # Более точные ключевые слова для генерации кода
+        # Расширенные ключевые слова для генерации кода
         code_keywords = [
-            'напиши код', 'сгенерируй код', 'пример кода на', 'код для',
-            'реализуй на', 'создай программу на', 'функция на', 'класс на'
+            'напиши код', 'сгенерируй код', 'пример кода', 'код для',
+            'реализуй', 'создай программу', 'функция', 'класс',
+            'напиши программу', 'создай код', 'покажи код',
+            'как написать', 'пример программы', 'исходный код',
+            'алгоритм', 'скрипт', 'утилита', 'приложение',
+            'сделай код', 'продемонстрируй код', 'выведи код'
         ]
         
-        # Проверяем, является ли запрос явным запросом на генерацию кода
-        is_code_request = any(keyword in message_lower for keyword in code_keywords)
-        
-        # Также проверяем наличие упоминания конкретных языков программирования
+        # Языки программирования
         programming_languages = [
             'python', 'javascript', 'java', 'c++', 'c#', 'c ', 'php', 'ruby', 'go', 'rust',
-            'питон', 'джаваскрипт', 'джава', 'си плюс', 'си шарп', 'си ', 'пхп', 'руби'
+            'питон', 'джаваскрипт', 'джава', 'си плюс', 'си шарп', 'си ', 'пхп', 'руби',
+            'html', 'css', 'sql', 'typescript'
         ]
         
-        has_language_mention = any(lang in message_lower for lang in programming_languages)
+        # Проверяем, является ли запрос запросом на генерацию кода
+        is_code_request = (
+            any(keyword in message_lower for keyword in code_keywords) or
+            any(lang in message_lower for lang in programming_languages)
+        )
         
-        # Генерируем код только если это явный запрос ИЛИ есть упоминание языка
-        if is_code_request or (has_language_mention and any(word in message_lower for word in ['код', 'функц', 'класс', 'алгоритм'])):
-            print(f"💻 Генерирую код для запроса: {message}")
+        # Дополнительные проверки для уверенности
+        code_indicators = [
+            'код', 'функц', 'класс', 'алгоритм', 'программ', 'скрипт',
+            'сортировк', 'поиск', 'калькулятор', 'база данных',
+            'переменн', 'цикл', 'массив', 'список', 'словарь',
+            'объект', 'метод', 'интерфейс', 'наследование'
+        ]
+        
+        has_code_indicator = any(indicator in message_lower for indicator in code_indicators)
+        
+        print(f"🔍 Анализ запроса на код: is_code_request={is_code_request}, has_code_indicator={has_code_indicator}")
+        
+        # Генерируем код если есть явные признаки
+        if is_code_request and has_code_indicator:
+            print(f"💻 Обнаружен запрос на генерацию кода: {message}")
             
             # Определяем язык программирования
             language = self._detect_programming_language(message)
+            print(f"🎯 Определен язык: {language}")
             
             # Генерируем код
             try:
                 generated_code = self.code_generator.generate_code(message, language)
                 
-                # Обновляем статистику
-                self.learning_stats['code_generated'] += 1
-                
-                response = f"""💻 **Сгенерированный код на {language.upper()}:**
+                if generated_code and not generated_code.startswith("❌"):
+                    response = f"""💻 **Сгенерированный код на {language.upper()}:**
 
 ```{language}
 {generated_code}
